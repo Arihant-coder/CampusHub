@@ -1,55 +1,93 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowDown, Trash2 } from "lucide-react";
+
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { ArrowDown } from "lucide-react";
+
 import { useChat } from "../hooks/useChat";
+import { MAX_STUDY_MATERIALS } from "../hooks/useStudyMaterials";
+
 import { ChatInput } from "./ChatInput";
 import { ChatMessageBubble } from "./ChatMessageBubble";
+
+import {
+  StudyMaterialsTray,
+  type StudyMaterialsTrayProps,
+} from "./StudyMaterialsTray";
 
 interface ChatBodyProps {
   subjectId: string;
   subjectName?: string;
-  onAddFiles?: (files: File[]) => void;
-  isUploadingFiles?: boolean;
-  canAddFiles?: boolean;
+  studyMaterials: StudyMaterialsTrayProps;
+
+  materialsVisible: boolean;
+  onToggleMaterialsVisibility: () => void;
+
+  onClearChatChange: (handler: (() => void) | null) => void;
 }
 
-/**
- * The scrollable message list + input bar for the Chat tool.
- * The shared Study Assistant header and study-material tray live in SubjectAiPanelPage.
- */
 export function ChatBody({
   subjectId,
   subjectName,
-  onAddFiles,
-  isUploadingFiles,
-  canAddFiles,
+  studyMaterials,
+  materialsVisible,
+  onToggleMaterialsVisibility,
+  onClearChatChange,
 }: ChatBodyProps) {
-  const { messages, isStreaming, send, regenerate, edit, stop, clear } = useChat(
-    subjectId,
-    subjectName,
-  );
+  const {
+    messages,
+    isStreaming,
+    send,
+    regenerate,
+    edit,
+    stop,
+    clear,
+  } = useChat(subjectId, subjectName);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
+  const clearRef = useRef(clear);
+
   const [showJump, setShowJump] = useState(false);
+
+  const hasMaterials = studyMaterials.materials.length > 0;
+
+  clearRef.current = clear;
 
   function handleScroll() {
     const el = scrollRef.current;
     if (!el) return;
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+
+    const nearBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+
     stickRef.current = nearBottom;
     setShowJump(!nearBottom);
   }
 
+  // Scroll only when the reader is already near the bottom.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && stickRef.current) el.scrollTop = el.scrollHeight;
+
+    if (el && stickRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [messages]);
 
   function jumpToLatest() {
     const el = scrollRef.current;
     if (!el) return;
+
     stickRef.current = true;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: "smooth",
+    });
   }
 
   function handleSend(text: string) {
@@ -62,6 +100,27 @@ export function ChatBody({
     void regenerate();
   }
 
+  // Register clear conversation action in parent header.
+  const handleClearChat = useCallback(() => {
+    stickRef.current = true;
+    setShowJump(false);
+    clearRef.current();
+  }, []);
+
+  useEffect(() => {
+    onClearChatChange(
+      messages.length > 0 ? handleClearChat : null,
+    );
+
+    return () => {
+      onClearChatChange(null);
+    };
+  }, [
+    messages.length,
+    handleClearChat,
+    onClearChatChange,
+  ]);
+
   const starters = [
     `What are the key topics in ${subjectName ?? "this subject"}?`,
     "Explain the hardest concept with a simple example",
@@ -70,23 +129,8 @@ export function ChatBody({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {messages.length > 0 && (
-        <div className="flex shrink-0 justify-end border-b px-2 py-0.5">
-          <button
-            type="button"
-            onClick={() => {
-              stickRef.current = true;
-              setShowJump(false);
-              clear();
-            }}
-            aria-label="Clear conversation"
-            className="rounded p-1 text-muted-foreground hover:bg-muted"
-          >
-            <Trash2 className="size-4" />
-          </button>
-        </div>
-      )}
 
+      {/* Conversation area */}
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
@@ -98,29 +142,35 @@ export function ChatBody({
               <p className="text-center text-sm text-muted-foreground">
                 Ask a question, or try one of these:
               </p>
-              {starters.map((q) => (
+
+              {starters.map((question) => (
                 <button
-                  key={q}
+                  key={question}
                   type="button"
-                  onClick={() => handleSend(q)}
-                  className="w-full rounded-lg border px-3 py-2 text-left text-sm hover:bg-muted"
+                  onClick={() => handleSend(question)}
+                  className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
                 >
-                  {q}
+                  {question}
                 </button>
               ))}
             </div>
           ) : (
-            messages.map((m, i) => {
-              const isLast = i === messages.length - 1;
+            messages.map((message, index) => {
+              const isLast = index === messages.length - 1;
+
               return (
                 <ChatMessageBubble
-                  key={m.id}
-                  message={m}
+                  key={message.id}
+                  message={message}
                   streaming={isLast && isStreaming}
-                  onRegenerate={isLast && !isStreaming ? handleRegenerate : undefined}
+                  onRegenerate={
+                    isLast && !isStreaming
+                      ? handleRegenerate
+                      : undefined
+                  }
                   onEdit={
-                    m.role === "user" && !isStreaming
-                      ? (text) => void edit(m.id, text)
+                    message.role === "user" && !isStreaming
+                      ? (text) => void edit(message.id, text)
                       : undefined
                   }
                 />
@@ -135,24 +185,57 @@ export function ChatBody({
             onClick={jumpToLatest}
             aria-label="Jump to latest"
             title="Jump to latest"
-            className="absolute bottom-2 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-zinc-500/80 bg-zinc-400 text-zinc-900 shadow-md transition-colors hover:bg-zinc-500 hover:text-white dark:border-zinc-500 dark:bg-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-500"
+            className="absolute bottom-3 left-1/2 flex size-8 -translate-x-1/2 items-center justify-center rounded-full border border-zinc-500/80 bg-zinc-400 text-zinc-900 shadow-md transition-colors hover:bg-zinc-500 hover:text-white dark:border-zinc-500 dark:bg-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-500"
           >
             <ArrowDown className="size-4" />
           </button>
         )}
       </div>
 
+      {/* Shared Study Materials bar */}
+      {hasMaterials && materialsVisible && (
+        <StudyMaterialsTray
+          {...studyMaterials}
+          showAddButton={false}
+        />
+      )}
+
+      {/* Upload error when no file has been added */}
+      {studyMaterials.error && studyMaterials.materials.length === 0 && (
+        <div
+          role="alert"
+          className="mx-3 mb-2 flex items-center justify-between gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+        >
+          <span>{studyMaterials.error}</span>
+
+          <button
+            type="button"
+            onClick={studyMaterials.onDismissError}
+            aria-label="Dismiss error"
+            className="shrink-0 rounded p-1 hover:bg-destructive/10"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* Chat composer */}
       <ChatInput
         isStreaming={isStreaming}
         onSend={handleSend}
         onStop={stop}
-        onAddFiles={onAddFiles}
-        isUploadingFiles={isUploadingFiles}
-        canAddFiles={canAddFiles}
+        onAddFiles={studyMaterials.onAddFiles}
+        isUploadingFiles={Boolean(studyMaterials.uploadingFile)}
+        canAddFiles={
+          studyMaterials.materials.length < MAX_STUDY_MATERIALS
+        }
+        showAttachmentButton={true}
+        showMaterialsToggle={hasMaterials}
+        materialsVisible={materialsVisible}
+        onToggleMaterials={onToggleMaterialsVisibility}
       />
     </div>
   );
 }
 
-// Keep the old ChatPanel export so nothing outside this feature breaks.
 export { ChatBody as ChatPanel };

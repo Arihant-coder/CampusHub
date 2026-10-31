@@ -27,15 +27,48 @@ async function getAuthToken(): Promise<string> {
   throw new StudyMaterialApiError("Please log in again.", 401);
 }
 
-async function readError(response: Response): Promise<StudyMaterialApiError> {
+async function readError(
+  response: Response,
+): Promise<StudyMaterialApiError> {
   let message = "Something went wrong while handling study materials.";
+
   try {
-    const body: { detail?: unknown } = await response.json();
-    if (typeof body.detail === "string") message = body.detail;
+    const body: {
+      detail?: unknown;
+    } = await response.json();
+
+    if (typeof body.detail === "string") {
+      message = body.detail;
+    } else if (
+      body.detail &&
+      typeof body.detail === "object"
+    ) {
+      const detail = body.detail as {
+        error?: {
+          message?: unknown;
+        };
+        message?: unknown;
+      };
+
+      if (typeof detail.error?.message === "string") {
+        message = detail.error.message;
+      } else if (typeof detail.message === "string") {
+        message = detail.message;
+      }
+    }
   } catch {
-    // Keep the fallback message when the response is not JSON.
+    // Keep the fallback message if the response isn't JSON.
   }
-  if (response.status === 401) message = "Your session has expired. Please log in again.";
+
+  if (response.status === 401) {
+    message = "Your session has expired. Please log in again.";
+  } else if (response.status === 429) {
+    message =
+      message === "Something went wrong while handling study materials."
+        ? "Too many requests. Please wait a minute and try again."
+        : message;
+  }
+
   return new StudyMaterialApiError(message, response.status);
 }
 
