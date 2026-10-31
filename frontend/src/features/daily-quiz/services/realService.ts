@@ -10,6 +10,7 @@ import { apiGet, apiPost } from "@/lib/api-client";
 import type { Result } from "@/shared/result";
 import type {
   DailyQuizService,
+  QuestionFeedbackItem,
   QuizQuestion,
   QuizSubmissionResult,
   TodayQuizResponse,
@@ -24,8 +25,8 @@ export const realDailyQuizService: DailyQuizService = {
         id: string;
         question: string;
         options: string[];
-        correct_answer_index: number;
-        explanation: string;
+        correct_answer_index?: number;
+        explanation?: string;
       }>;
     }>("/api/v1/daily-quiz/today");
 
@@ -57,10 +58,29 @@ export const realDailyQuizService: DailyQuizService = {
       score: number;
       total: number;
       streak_count: number;
+      details?: Record<
+        string,
+        {
+          is_correct: boolean;
+          correct_answer_index: number;
+          explanation: string;
+        }
+      >;
     }>("/api/v1/daily-quiz/submit", { answers });
 
     if (result.error) {
       return { data: null, error: result.error };
+    }
+
+    const details: Record<string, QuestionFeedbackItem> = {};
+    if (result.data.details) {
+      Object.entries(result.data.details).forEach(([qid, item]) => {
+        details[qid] = {
+          isCorrect: item.is_correct,
+          correctAnswerIndex: item.correct_answer_index,
+          explanation: item.explanation,
+        };
+      });
     }
 
     return {
@@ -68,6 +88,7 @@ export const realDailyQuizService: DailyQuizService = {
         score: result.data.score,
         total: result.data.total,
         streakCount: result.data.streak_count,
+        details,
       },
       error: null,
     };

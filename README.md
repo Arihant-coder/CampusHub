@@ -25,6 +25,7 @@ Every developer is assigned one isolated feature folder in Frontend (+ 1 matchin
 
 | Feature / Module | Frontend Path | Backend Path | Data & API Flow |
 | :--- | :--- | :--- | :--- |
+| **Auth** | [`src/features/auth/`](frontend/src/features/auth/) | *None* | Supabase Auth UI / Mock Presets |
 | **Dashboard** | [`src/features/dashboard/`](frontend/src/features/dashboard/README.md) | *None* | Direct **Supabase** |
 | **Communities** | [`src/features/communities/`](frontend/src/features/communities/README.md) | *None* | Direct **Supabase** |
 | **Subject Editor & Viewer** | [`src/features/subject-viewer/`](frontend/src/features/subject-viewer/README.md) | *None* | Direct **Supabase** |
@@ -54,6 +55,7 @@ frontend/src/
 │   └── user.ts
 │
 └── features/                   # 🎯 1 Folder = 1 Developer Ownership
+    ├── auth/                   # Login, signup, role selector & avatar management
     ├── dashboard/              # Dashboard overview (components/, services/, routes.tsx, DashboardPage.tsx)
     ├── communities/            # Forum & resource archive (components/, services/, routes.tsx, CommunitiesPage.tsx)
     ├── subject-viewer/         # Notes tree & document viewer (components/, services/, routes.tsx, SubjectViewerPage.tsx)
@@ -161,4 +163,63 @@ All test accounts use the password: `password123`
 | **Admin** | `admin@campushub.edu` | `password123` | Dr. Sarah Vance | `@sarah_vance` | System administrator with full access across modules. |
 
 You can also use the one-click preset buttons on the `/login` screen to sign in instantly as any role.
+
+For complete local environment variables and `.env.local` instructions, see [frontend/README.md](frontend/README.md#2-environment-configuration-envlocal).
+
+---
+
+## 6. Git Collaboration & Synchronization Guide
+
+CampusHub follows a strict **1 Feature Folder = 1 Developer Ownership** model with a centralized upstream repository.
+
+- **Upstream Repository**: `https://github.com/Peanutbrain-pro/CampusHub.git`
+
+### Essential Git Commands:
+
+1. **One-Time Setup (Add Upstream)**:
+   ```bash
+   git remote add upstream https://github.com/Peanutbrain-pro/CampusHub.git
+   git remote -v
+   ```
+
+2. **Daily Routine (Always Sync Before Starting Work)**:
+   ```bash
+   git checkout main
+   git fetch upstream
+   git merge upstream/main --ff-only
+   git push origin main
+   ```
+
+3. **Feature Branching (1 Feature = 1 Branch)**:
+   ```bash
+   git checkout -b feature/<feature-name>
+   ```
+
+4. **Syncing While Working (Rebase on Upstream)**:
+   ```bash
+   git fetch upstream
+   git rebase upstream/main
+   ```
+
+5. **Protecting Secrets & Staging Hygiene**:
+   - **Never commit `.env.local`** or API keys.
+   - Stage only files within your assigned feature directory (`git add src/features/<feature>/`).
+
+6. **Submitting a Pull Request**:
+   ```bash
+   git push -u origin feature/<feature-name>
+   ```
+   Open a PR against `Peanutbrain-pro/CampusHub:main`.
+
+For detailed Git instructions and conflict resolution steps, see [frontend/README.md](frontend/README.md#4-git-collaboration--synchronization-guide).
+
+---
+
+## 7. Design & UI Philosophy ("Keep It Simple")
+
+1. **Simplicity Over Clutter**: The interface must remain clean, breathable, and distraction-free. Avoid filling empty spaces with decorative widgets or unnecessary cards.
+2. **No Random Long Text**: Do not include walls of text, multi-paragraph background explanations, or filler copy for no reason. Keep microcopy to 1–2 actionable sentences maximum.
+3. **Empty States**: Present a single concise sentence describing the status plus a clear action button.
+4. **Consistency**: Use standard shadcn/ui components, semantic Tailwind tokens, and intuitive Lucide icons.
+
 

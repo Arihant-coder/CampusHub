@@ -5,6 +5,7 @@ Business logic for the Daily Quiz feature.
 from fastapi import HTTPException
 
 from features.daily_quiz.schemas import (
+    QuestionFeedback,
     QuizSubmissionRequest,
     QuizSubmissionResponse,
 )
@@ -96,16 +97,24 @@ def submit_quiz(
                 detail=f"Invalid answer index for question {question_id}",
             )
 
-    # Calculate the score using backend-held correct answers.
-    score = sum(
-        1
-        for question_id, question in question_map.items()
-        if request.answers.get(question_id)
-        == question["correct_answer_index"]
-    )
+    # Calculate the score and per-question feedback using backend-held correct answers.
+    score = 0
+    details = {}
+    for question_id, question in question_map.items():
+        correct_idx = question["correct_answer_index"]
+        user_idx = request.answers.get(question_id)
+        is_correct = user_idx == correct_idx
+        if is_correct:
+            score += 1
+        details[question_id] = QuestionFeedback(
+            is_correct=is_correct,
+            correct_answer_index=correct_idx,
+            explanation=question.get("explanation", ""),
+        )
 
     return QuizSubmissionResponse(
         score=score,
         total=len(question_map),
         streak_count=1,
+        details=details,
     )

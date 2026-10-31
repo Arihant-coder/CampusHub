@@ -44,12 +44,21 @@ class QuizSubmissionRequest(BaseModel):
         return answers
 
 
+class QuestionFeedback(BaseModel):
+    """Evaluation feedback for a single question."""
+
+    is_correct: bool
+    correct_answer_index: int
+    explanation: str
+
+
 class QuizSubmissionResponse(BaseModel):
     """Result returned after submitting a quiz."""
 
     score: int
     total: int
     streak_count: int
+    details: Dict[str, QuestionFeedback] = Field(default_factory=dict)
 
 
 class QuizSubmissionRecord(BaseModel):

@@ -49,7 +49,6 @@ export function UploadModal({
   const [title, setTitle] = useState("");
   const [type, setType] = useState<ResourceType>(defaultType);
   const [category, setCategory] = useState<ResourceCategory>("Day wise");
-  const [pageCount, setPageCount] = useState<number>(10);
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -63,7 +62,7 @@ export function UploadModal({
         title: title.trim(),
         type,
         category,
-        pageCount: Number(pageCount) || 1,
+        pageCount: 1,
         file: file || undefined,
       });
       setTitle("");
@@ -130,17 +129,6 @@ export function UploadModal({
               </Select>
             </div>
           )}
-
-          <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-foreground">Estimated Page Count</label>
-            <Input
-              type="number"
-              min={1}
-              max={500}
-              value={pageCount}
-              onChange={(e) => setPageCount(parseInt(e.target.value, 10) || 1)}
-            />
-          </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-foreground">Upload PDF (optional)</label>

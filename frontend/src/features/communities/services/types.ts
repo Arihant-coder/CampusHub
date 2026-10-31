@@ -5,6 +5,9 @@
  */
 
 import type { Result } from "@/shared/result";
+import type { Post } from "@/shared/communities";
+
+export type { Post };
 
 export type ResourceCategory = "All" | "Day wise" | "Unit wise" | "Other";
 export type ResourceType = "Note" | "PYQ";
@@ -17,24 +20,6 @@ export interface SubjectForum {
   isPinned?: boolean;
   description?: string;
   imageUrl?: string | null;
-}
-
-export interface Post {
-  id: string;
-  subjectId: string;
-  authorId: string;
-  authorHandle: string;
-  authorAvatarUrl?: string | null;
-  title: string;
-  body?: string;
-  imageUrl?: string | null;
-  images?: string[];
-  upvotes: number;
-  downvotes: number;
-  replyCount: number;
-  hotScore?: number;
-  createdAt: string;
-  currentUserVote?: 1 | -1 | null;
 }
 
 export interface Comment {
@@ -61,7 +46,8 @@ export interface ResourceNote {
   type: ResourceType; // "Note" | "PYQ"
   category: ResourceCategory; // "Day wise" | "Unit wise" | "Other"
   uploaderHandle: string;
-  pageCount: number;
+  pageCount?: number;
+  fileSizeBytes?: number;
   storagePath: string;
   createdAt: string;
 }
@@ -101,4 +87,7 @@ export interface CommunitiesService {
     pageCount?: number;
     file?: File;
   }): Promise<Result<ResourceNote>>;
+  deleteResource?(resourceId: string, storagePath: string): Promise<Result<boolean>>;
+  deletePost?(postId: string, imagePaths?: string[]): Promise<Result<boolean>>;
+  deleteComment?(commentId: string, imagePaths?: string[]): Promise<Result<boolean>>;
 }

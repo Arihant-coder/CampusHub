@@ -110,7 +110,7 @@ const mockFetch: typeof fetch = async (input, init) => {
       if (handle.startsWith("@")) handle = handle.slice(1);
       const fullName = body.data?.full_name || handle;
 
-      const mockResponse = {
+      const mockUser = {
         id: `mock-${handle}-uuid`,
         aud: "authenticated",
         role: "authenticated",
@@ -126,6 +126,17 @@ const mockFetch: typeof fetch = async (input, init) => {
         },
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+      };
+
+      const mockResponse = {
+        user: mockUser,
+        session: {
+          access_token: `mock-token-student-${mockUser.id}`,
+          token_type: "bearer",
+          expires_in: 3600,
+          refresh_token: "mock-refresh-token",
+          user: mockUser,
+        },
       };
 
       return new Response(JSON.stringify(mockResponse), {

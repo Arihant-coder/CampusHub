@@ -1,7 +1,7 @@
 /**
  * @file LoginForm.tsx
- * @description Modern shadcn/ui login & registration form block supporting custom unique handles
- *              and username-based authentication integrated with Supabase and offline mock mode.
+ * @description Modern shadcn/ui login & registration form block supporting custom unique handles,
+ *              real-time availability checks, clear inline error feedback, and offline fallback.
  * @owner Platform Core Team
  */
 
@@ -17,12 +17,35 @@ import type { UserProfile } from "@/shared/user";
 import { toast } from "sonner";
 
 interface LoginFormProps {
+  mode?: "signin" | "signup";
+  onModeChange?: (mode: "signin" | "signup") => void;
   isMock: boolean;
   onSuccess: (profile: UserProfile) => void;
 }
 
-export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+export const LoginForm: React.FC<LoginFormProps> = ({
+  mode: controlledMode,
+  onModeChange,
+  isMock,
+  onSuccess,
+}) => {
+  const [internalMode, setInternalMode] = useState<"signin" | "signup">(controlledMode || "signin");
+
+  // Keep internal state aligned if parent passes down a new mode
+  useEffect(() => {
+    if (controlledMode) {
+      setInternalMode(controlledMode);
+    }
+  }, [controlledMode]);
+
+  const currentMode = controlledMode || internalMode;
+
+  const handleSetMode = (nextMode: "signin" | "signup") => {
+    setInternalMode(nextMode);
+    onModeChange?.(nextMode);
+    setHandleStatus({ available: null });
+    setErrorMessage(null);
+  };
 
   // Sign-in identifier (accepts either username or email)
   const [identifier, setIdentifier] = useState("");
@@ -34,6 +57,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
   const [password, setPassword] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [handleStatus, setHandleStatus] = useState<{
     available: boolean | null;
@@ -41,13 +65,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
   }>({ available: null });
 
   // Debounced handle for real-time validation & availability check
-  const debouncedHandle = useDebounce(handle.trim(), 350);
+  const debouncedHandle = useDebounce(handle.trim(), 300);
 
   useEffect(() => {
     let isCancelled = false;
 
     async function evaluateHandle() {
-      if (mode !== "signup" || !debouncedHandle) {
+      if (currentMode !== "signup" || !debouncedHandle) {
         setHandleStatus({ available: null });
         setIsCheckingHandle(false);
         return;
@@ -77,23 +101,31 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
     return () => {
       isCancelled = true;
     };
-  }, [debouncedHandle, mode, isMock]);
+  }, [debouncedHandle, currentMode, isMock]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
-    if (mode === "signin") {
-      if (!identifier.trim() || !password) {
-        toast.error("Please enter your username (or email) and password.");
+    if (currentMode === "signin") {
+      const trimmedId = identifier.trim();
+      if (!trimmedId) {
+        setErrorMessage("Please enter your campus email.");
+        return;
+      }
+      if (!password) {
+        setErrorMessage("Please enter your password.");
         return;
       }
 
       setIsLoading(true);
-      const res = await authService.login(identifier, password, isMock);
+      const res = await authService.login(trimmedId, password, isMock);
       setIsLoading(false);
 
       if (res.error) {
-        toast.error(res.error.message);
+        const message = res.error.message || "Invalid campus email or password. Please try again.";
+        setErrorMessage(message);
+        toast.error(message);
         return;
       }
 
@@ -103,60 +135,101 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
       }
     } else {
       // Sign-up validation
-      if (!handle.trim()) {
-        toast.error("Please choose a username.");
+      const cleanHandle = handle.trim().toLowerCase();
+      if (!cleanHandle) {
+        setErrorMessage("Please choose a username.");
         return;
       }
       if (!fullName.trim()) {
-        toast.error("Please enter your full name.");
+        setErrorMessage("Please enter your full name.");
         return;
       }
       if (!email.trim()) {
-        toast.error("Please enter your email.");
+        setErrorMessage("Please enter your campus email.");
         return;
       }
       if (!password || password.length < 6) {
-        toast.error("Password must be at least 6 characters.");
+        setErrorMessage("Password must be at least 6 characters.");
         return;
       }
 
+      // Check handle status
       if (handleStatus.available === false) {
-        toast.error(handleStatus.error || "Please choose a valid and available username.");
+        const errorText = handleStatus.error || "Please choose a valid and available username.";
+        setErrorMessage(errorText);
         return;
+      }
+
+      // If check is still pending or wasn't triggered yet
+      if (handleStatus.available === null) {
+        const val = authService.validateHandle(cleanHandle);
+        if (!val.valid) {
+          const errorText = val.error || "Invalid username format.";
+          setErrorMessage(errorText);
+          return;
+        }
+        setIsLoading(true);
+        const check = await authService.checkHandleAvailability(val.cleanHandle, isMock);
+        if (!check.available) {
+          setIsLoading(false);
+          const errorText = check.error || "This username is already taken.";
+          setErrorMessage(errorText);
+          return;
+        }
       }
 
       setIsLoading(true);
-      const res = await authService.signUp(email, password, fullName, handle, isMock);
+      const res = await authService.signUp(email, password, fullName, cleanHandle, isMock);
       setIsLoading(false);
 
       if (res.error) {
+        setErrorMessage(res.error.message);
         toast.error(res.error.message);
         return;
       }
 
       if (res.data) {
-        toast.success(`Account @${res.data.handle} created successfully!`);
-        onSuccess(res.data);
+        if (res.data.requiresVerification) {
+          toast.info("Account created! Please check your campus email inbox to verify your account, then sign in.", {
+            duration: 7000,
+          });
+          handleSetMode("signin");
+          setIdentifier(email);
+        } else {
+          toast.success(`Account @${res.data.handle} created successfully!`);
+          onSuccess(res.data);
+        }
       }
     }
   };
 
   return (
-    <Card className="w-full shadow-md">
-      <CardHeader className="space-y-1 text-center">
-        <CardTitle className="text-2xl font-bold tracking-tight">
-          {mode === "signin" ? "Login to your account" : "Create an account"}
+    <Card className="w-full shadow-sm border bg-card">
+      <CardHeader className="space-y-1.5 text-center pb-4">
+        <CardTitle className="text-xl font-semibold tracking-tight">
+          {currentMode === "signin" ? "Sign in to your account" : "Create an account"}
         </CardTitle>
         <CardDescription className="text-xs text-muted-foreground">
-          {mode === "signin"
-            ? "Enter your username or email and password below"
-            : "Choose a unique username and register for CampusHub"}
+          {currentMode === "signin"
+            ? "Enter your campus email and password below"
+            : "Enter your university credentials to get started"}
         </CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Inline Feedback Banner */}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+            <span className="font-medium leading-snug">{errorMessage}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "signup" ? (
+          {currentMode === "signup" ? (
             <>
               {/* Unique Username / Handle Field */}
               <div className="space-y-1.5">
@@ -187,13 +260,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
                   type="text"
                   placeholder="unique_username"
                   value={handle}
-                  onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/\s+/g, "_"))}
+                  onChange={(e) => {
+                    setHandle(e.target.value.toLowerCase().replace(/\s+/g, "_"));
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                   autoComplete="username"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  4–20 characters. Letters, numbers, and underscores only.
+                  4–20 characters. Lowercase letters, numbers, and underscores only.
                 </p>
               </div>
 
@@ -205,7 +281,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
                   type="text"
                   placeholder="John Doe"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                 />
@@ -213,32 +292,40 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
 
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email">University Email</Label>
+                <Label htmlFor="email">Campus Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@university.edu"
+                  placeholder="student@college.edu"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                 />
               </div>
             </>
           ) : (
-            /* Sign In: Identifier Field (Username or Email) */
+            /* Sign In: Campus Email Field */
             <div className="space-y-2">
-              <Label htmlFor="identifier">Username or Email</Label>
+              <Label htmlFor="identifier">Campus Email</Label>
               <Input
                 id="identifier"
-                type="text"
-                placeholder="username or email"
-                autoComplete="username"
+                type="email"
+                placeholder="student@college.edu"
+                autoComplete="email"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 required
                 disabled={isLoading}
+                aria-invalid={Boolean(errorMessage)}
+                className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
               />
             </div>
           )}
@@ -247,7 +334,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
-              {mode === "signin" && (
+              {currentMode === "signin" && (
                 <a
                   href="#forgot"
                   onClick={(e) => {
@@ -263,43 +350,46 @@ export const LoginForm: React.FC<LoginFormProps> = ({ isMock, onSuccess }) => {
             <Input
               id="password"
               type="password"
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              placeholder={currentMode === "signup" ? "At least 6 characters" : undefined}
+              autoComplete={currentMode === "signin" ? "current-password" : "new-password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               required
               disabled={isLoading}
+              aria-invalid={Boolean(errorMessage)}
+              className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
             />
           </div>
 
           <Button
             type="submit"
             className="w-full font-medium cursor-pointer"
-            disabled={isLoading || (mode === "signup" && isCheckingHandle)}
+            disabled={isLoading || (currentMode === "signup" && isCheckingHandle)}
           >
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isLoading
-              ? mode === "signin"
+              ? currentMode === "signin"
                 ? "Signing in..."
                 : "Creating account..."
-              : mode === "signin"
-                ? "Sign In"
-                : "Sign Up"}
+              : currentMode === "signin"
+                ? "Sign in"
+                : "Create account"}
           </Button>
         </form>
 
-        <div className="mt-4 text-center text-xs">
+        <div className="mt-5 text-center text-xs">
           <span className="text-muted-foreground">
-            {mode === "signin" ? "Don't have an account? " : "Already have an account? "}
+            {currentMode === "signin" ? "Don't have an account? " : "Already have an account? "}
           </span>
           <button
             type="button"
-            onClick={() => {
-              setMode(mode === "signin" ? "signup" : "signin");
-              setHandleStatus({ available: null });
-            }}
+            onClick={() => handleSetMode(currentMode === "signin" ? "signup" : "signin")}
             className="font-medium text-primary hover:underline underline-offset-4 cursor-pointer"
           >
-            {mode === "signin" ? "Sign up" : "Sign in"}
+            {currentMode === "signin" ? "Sign up" : "Sign in"}
           </button>
         </div>
       </CardContent>

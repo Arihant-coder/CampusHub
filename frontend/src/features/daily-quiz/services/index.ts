@@ -9,14 +9,15 @@ import type { DailyQuizService } from "./types";
 import { mockDailyQuizService } from "./mockService";
 import { realDailyQuizService } from "./realService";
 
-const useMocks = import.meta.env.VITE_USE_MOCKS !== "false";
+const isMock = import.meta.env.VITE_USE_MOCKS === "true";
 
-export const dailyQuizService: DailyQuizService = useMocks
+export const dailyQuizService: DailyQuizService = isMock
   ? mockDailyQuizService
   : realDailyQuizService;
 
 export type {
   DailyQuizService,
+  QuestionFeedbackItem,
   QuizQuestion,
   QuizSubmissionResult,
   TodayQuizResponse,

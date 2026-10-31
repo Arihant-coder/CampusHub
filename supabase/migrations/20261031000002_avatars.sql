@@ -1,10 +1,9 @@
 -- =============================================================================
--- Migration: avatars.sql
+-- Migration: 20261031000002_avatars.sql
 -- Description: Storage bucket and security policies for user profile avatars
 -- Size Limit: 50 KB (51,200 bytes)
 -- =============================================================================
 
--- 1. Create the 'avatars' storage bucket with strict 50 KB ceiling
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
     'avatars',
@@ -18,14 +17,11 @@ ON CONFLICT (id) DO UPDATE SET
     file_size_limit = 51200,
     allowed_mime_types = ARRAY['image/webp', 'image/jpeg', 'image/png'];
 
--- 2. Storage Policies
-
--- Allow public read access to all avatars
+-- Storage Policies
 CREATE POLICY "Avatar images are publicly accessible"
     ON storage.objects FOR SELECT
     USING (bucket_id = 'avatars');
 
--- Allow authenticated users to upload their own avatar file
 CREATE POLICY "Users can upload their own avatar"
     ON storage.objects FOR INSERT
     TO authenticated
@@ -34,7 +30,6 @@ CREATE POLICY "Users can upload their own avatar"
         (storage.foldername(name))[1] = auth.uid()::text
     );
 
--- Allow authenticated users to update their own avatar file
 CREATE POLICY "Users can update their own avatar"
     ON storage.objects FOR UPDATE
     TO authenticated
@@ -43,7 +38,6 @@ CREATE POLICY "Users can update their own avatar"
         (storage.foldername(name))[1] = auth.uid()::text
     );
 
--- Allow authenticated users to delete their own avatar file
 CREATE POLICY "Users can delete their own avatar"
     ON storage.objects FOR DELETE
     TO authenticated

@@ -196,6 +196,7 @@ export default function CommunitiesPage() {
             {/* Tab 2: Resources (Notes & PYQs) */}
             <TabsContent value="resources" className="mt-4 focus-visible:outline-none">
               <ResourceArchive
+                subjectId={activeForum.id}
                 notes={notes}
                 pyqs={pyqs}
                 isLoadingNotes={isLoadingNotes}
