@@ -1,7 +1,7 @@
 /**
  * @file authService.ts
- * @description Unified authentication service supporting Supabase Auth and seamless offline mock fallback,
- *              featuring custom unique handles/usernames during registration and login.
+ * @description Unified authentication service supporting Supabase Auth and offline mock fallback,
+ *              featuring custom unique handles/usernames, campus domain validation, and fail-closed checks.
  * @owner Platform Core Team
  */
 
@@ -35,7 +35,7 @@ export interface RegisteredMockUser {
 export const authService = {
   /**
    * Sanitizes and validates a username/handle format.
-   * Handles must be 3-20 characters long and consist of alphanumeric characters and underscores.
+   * Handles must be 4-20 characters long and consist of alphanumeric characters and underscores.
    */
   validateHandle(handle: string): { valid: boolean; error?: string; cleanHandle: string } {
     let clean = (handle || "").trim().toLowerCase();
@@ -73,6 +73,7 @@ export const authService = {
 
   /**
    * Checks if a handle is available for registration.
+   * Strictly FAILS CLOSED on network, RPC, or query error.
    */
   async checkHandleAvailability(
     handle: string,
@@ -106,26 +107,16 @@ export const authService = {
       return { available: true };
     }
 
-    // Live Supabase RPC check
+    // Live Supabase RPC check (Fails closed on error)
     try {
       const { data, error } = await supabase.rpc("check_handle_available", {
         p_handle: cleanHandle,
       });
 
       if (error) {
-        // Fallback to table lookup if RPC is pending migration deployment
-        const { data: existing, error: selectError } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("handle", cleanHandle)
-          .maybeSingle();
-
-        if (selectError) {
-          return { available: true };
-        }
         return {
-          available: !existing,
-          error: existing ? "This username is already taken." : undefined,
+          available: false,
+          error: "Unable to verify username availability right now. Please try again.",
         };
       }
 
@@ -134,113 +125,81 @@ export const authService = {
         error: !data ? "This username is already taken." : undefined,
       };
     } catch {
-      return { available: true };
+      return {
+        available: false,
+        error: "Unable to verify username availability right now. Please check your connection.",
+      };
     }
   },
 
   /**
-   * Universal sign-in handler accepting either a username/handle or email.
+   * Sign-in handler using campus email and password.
    */
-  async login(identifier: string, password: string, isMock: boolean): Promise<Result<UserProfile>> {
-    let cleanId = identifier.trim().toLowerCase();
-    if (cleanId.startsWith("@")) {
-      cleanId = cleanId.slice(1);
-    }
+  async login(emailInput: string, password: string, isMock: boolean): Promise<Result<UserProfile>> {
+    const cleanEmail = emailInput.trim().toLowerCase();
 
-    if (!cleanId) {
+    if (!cleanEmail) {
       return {
         data: null,
-        error: { code: "VALIDATION", message: "Please enter your username or email." },
+        error: { code: "VALIDATION", message: "Please enter your campus email." },
       };
     }
 
     if (isMock) {
-      // 1. Check pre-configured mock accounts (match either email or handle)
+      // Check pre-configured mock accounts (by email or handle)
       const match = Object.values(MOCK_ACCOUNTS).find(
         (acc) =>
-          acc.email.toLowerCase() === cleanId ||
-          acc.profile.handle.toLowerCase() === cleanId
+          acc.email.toLowerCase() === cleanEmail ||
+          acc.profile.handle.toLowerCase() === cleanEmail
       );
 
       if (match) {
         if (password && password !== match.password) {
           return {
             data: null,
-            error: { code: "UNAUTHENTICATED", message: "Invalid password. (Check .env.local for mock passwords)" },
+            error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
         localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(match.profile));
         return { data: match.profile, error: null };
       }
 
-      // 2. Check custom registered mock accounts
+      // Check registered mock accounts
       const localUsers = this.getRegisteredMockUsers();
       const registeredMatch = localUsers.find(
         (u) =>
-          u.email.toLowerCase() === cleanId ||
-          u.handle.toLowerCase() === cleanId
+          u.email.toLowerCase() === cleanEmail ||
+          u.handle.toLowerCase() === cleanEmail
       );
 
       if (registeredMatch) {
         if (password && registeredMatch.password && password !== registeredMatch.password) {
           return {
             data: null,
-            error: { code: "UNAUTHENTICATED", message: "Invalid password." },
+            error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
         localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(registeredMatch.profile));
         return { data: registeredMatch.profile, error: null };
       }
 
-      // 3. Allow custom identifier fallback in mock mode
-      const isEmail = cleanId.includes("@") && cleanId.includes(".");
-      const handle = isEmail ? cleanId.split("@")[0] : cleanId;
-      const customProfile: UserProfile = {
-        id: `mock-${handle}-uuid`,
-        handle,
-        fullName: handle.replace(/[^a-zA-Z0-9]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        avatarUrl: null,
-        role: "student",
-        createdAt: new Date().toISOString(),
+      return {
+        data: null,
+        error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
       };
-
-      localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(customProfile));
-      return { data: customProfile, error: null };
     }
 
-    // Live Supabase Authentication
+    // Live Supabase Authentication strictly using email and password
     try {
-      let emailToAuth = cleanId;
-
-      // If user typed a username instead of an email, resolve it to email via RPC
-      const isLikelyEmail = cleanId.includes("@") && cleanId.includes(".");
-      if (!isLikelyEmail) {
-        const { data: resolvedEmail, error: rpcError } = await supabase.rpc(
-          "get_email_by_handle",
-          { p_handle: cleanId }
-        );
-
-        if (rpcError || !resolvedEmail) {
-          return {
-            data: null,
-            error: {
-              code: "NOT_FOUND",
-              message: "No account found with this username. Please check your username or sign up.",
-            },
-          };
-        }
-        emailToAuth = (resolvedEmail as string).toLowerCase().trim();
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: emailToAuth,
+        email: cleanEmail,
         password,
       });
 
       if (error || !data.user) {
         return {
           data: null,
-          error: { code: "UNAUTHENTICATED", message: error?.message || "Sign in failed" },
+          error: { code: "UNAUTHENTICATED", message: error?.message || "Invalid email or password" },
         };
       }
 
@@ -249,7 +208,7 @@ export const authService = {
         return { data: profile, error: null };
       }
 
-      // Fallback if profile row is provisioning
+      // Fallback profile if row is still synchronizing
       return {
         data: {
           id: data.user.id,
@@ -270,7 +229,7 @@ export const authService = {
   },
 
   /**
-   * Universal sign-up handler with custom username/handle.
+   * Universal sign-up handler with custom username/handle and campus domain enforcement.
    */
   async signUp(
     email: string,
@@ -310,7 +269,6 @@ export const authService = {
         createdAt: new Date().toISOString(),
       };
 
-      // Store in registered mock users for future logins
       this.saveRegisteredMockUser({
         handle: cleanHandle,
         email: cleanEmail,
@@ -322,12 +280,13 @@ export const authService = {
       return { data: { ...newMockProfile, requiresVerification: false }, error: null };
     }
 
-    // Live Supabase Sign Up
+    // Live Supabase Sign Up with redirect URL
     try {
       const { data, error } = await supabase.auth.signUp({
         email: cleanEmail,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             full_name: fullName.trim() || cleanHandle,
             handle: cleanHandle,
@@ -337,8 +296,12 @@ export const authService = {
 
       if (error || !data.user) {
         let msg = error?.message || "Sign up failed";
-        if (msg.toLowerCase().includes("unique") || msg.toLowerCase().includes("handle")) {
+        if (msg.includes("Registration restricted to authorized campus email domains")) {
+          msg = "Registration is restricted to authorized campus email domains (e.g. @college.edu).";
+        } else if (msg.includes("already taken") || msg.toLowerCase().includes("duplicate_object")) {
           msg = "This username is already taken. Please choose another username.";
+        } else if (msg.includes("Database error saving new user")) {
+          msg = "Registration failed: please ensure your email domain is authorized and username is unique.";
         }
         return {
           data: null,
@@ -346,7 +309,7 @@ export const authService = {
         };
       }
 
-      // Check if user already exists (Supabase returns empty identities array when email exists)
+      // Check if user already exists
       if (data.user.identities && data.user.identities.length === 0) {
         return {
           data: null,
@@ -450,7 +413,7 @@ export const authService = {
   },
 
   /**
-   * Live Supabase: Fetch profile from public.profiles table.
+   * Live Supabase: Fetch profile strictly from public.profiles table.
    */
   async getLiveProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await supabase

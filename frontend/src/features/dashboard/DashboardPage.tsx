@@ -10,10 +10,10 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
-import { subjects } from "@/shared/subjects";
 import { useAuth } from "@/lib/auth-context";
-import { communitiesService } from "@/features/communities/services";
-import type { Post } from "@/features/communities/services/types";
+import type { Subject } from "@/shared/user";
+import type { Post } from "@/shared/communities";
+import { dashboardService } from "./services";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -21,47 +21,43 @@ export default function DashboardPage() {
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(today);
   const [calendarMonth, setCalendarMonth] = useState<Date>(today);
+  const [enrolledSubjects, setEnrolledSubjects] = useState<Subject[]>([]);
+  const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [hotPosts, setHotPosts] = useState<Post[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadHotPosts() {
+    async function loadDashboardData() {
       try {
+        setLoadingSubjects(true);
         setLoadingPosts(true);
-        const postPromises = subjects.map((subject) =>
-          communitiesService.getPosts(subject.id, "hot")
-        );
-        const results = await Promise.all(postPromises);
 
-        const allPosts: Post[] = [];
-        for (const res of results) {
-          if (res.data) {
-            allPosts.push(...res.data);
+        const [subjectsRes, postsRes] = await Promise.all([
+          dashboardService.getEnrolledSubjects(),
+          dashboardService.getHotDiscussions(5),
+        ]);
+
+        if (isMounted) {
+          if (subjectsRes.data) {
+            setEnrolledSubjects(subjectsRes.data);
+          }
+          if (postsRes.data) {
+            setHotPosts(postsRes.data);
           }
         }
-
-        // Sort by net upvotes & activity
-        allPosts.sort(
-          (a, b) =>
-            b.upvotes - b.downvotes + b.replyCount * 2 -
-            (a.upvotes - a.downvotes + a.replyCount * 2)
-        );
-
-        if (isMounted) {
-          setHotPosts(allPosts.slice(0, 5));
-        }
       } catch (err) {
-        console.error("Failed to load hot community posts:", err);
+        console.error("Failed to load dashboard data:", err);
       } finally {
         if (isMounted) {
+          setLoadingSubjects(false);
           setLoadingPosts(false);
         }
       }
     }
 
-    void loadHotPosts();
+    void loadDashboardData();
 
     return () => {
       isMounted = false;
@@ -92,26 +88,36 @@ export default function DashboardPage() {
             </CardHeader>
 
             <CardContent className="p-4 sm:p-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {subjects.map((subject) => (
-                  <Link
-                    key={subject.id}
-                    to={`/subjects/${subject.id}`}
-                    className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:bg-muted/40 hover:shadow-xs"
-                  >
-                    <div className="space-y-1">
-                      <span className="font-mono text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">
-                        {subject.code}
-                      </span>
-                      <h2 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-                        {subject.name}
-                      </h2>
-                    </div>
+              {loadingSubjects ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Loading enrolled subjects...
+                </div>
+              ) : enrolledSubjects.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No enrolled subjects found.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {enrolledSubjects.map((subject) => (
+                    <Link
+                      key={subject.id}
+                      to={`/subjects/${subject.id}`}
+                      className="group flex items-center justify-between rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/50 hover:bg-muted/40 hover:shadow-xs"
+                    >
+                      <div className="space-y-1">
+                        <span className="font-mono text-xs font-semibold text-muted-foreground group-hover:text-primary transition-colors">
+                          {subject.code}
+                        </span>
+                        <h2 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                          {subject.name}
+                        </h2>
+                      </div>
 
-                    <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-foreground" />
-                  </Link>
-                ))}
-              </div>
+                      <ArrowRight className="size-4 shrink-0 text-muted-foreground transition-all group-hover:translate-x-0.5 group-hover:text-foreground" />
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -165,7 +171,7 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-2">
                 {hotPosts.map((post) => {
-                  const subject = subjects.find((s) => s.id === post.subjectId);
+                  const subject = enrolledSubjects.find((s) => s.id === post.subjectId);
 
                   return (
                     <Link

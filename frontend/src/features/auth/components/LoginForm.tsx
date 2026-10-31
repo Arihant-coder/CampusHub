@@ -1,17 +1,16 @@
 /**
  * @file LoginForm.tsx
  * @description Modern shadcn/ui login & registration form block supporting custom unique handles,
- *              tabbed switching, real-time availability checks, and offline mock fallback.
+ *              real-time availability checks, clear inline error feedback, and offline fallback.
  * @owner Platform Core Team
  */
 
 import React, { useState, useEffect } from "react";
-import { Loader2, Check, AlertCircle, Sparkles } from "lucide-react";
+import { Loader2, Check, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { authService } from "../services/authService";
 import { useDebounce } from "@/lib/use-debounce";
 import type { UserProfile } from "@/shared/user";
@@ -45,6 +44,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     setInternalMode(nextMode);
     onModeChange?.(nextMode);
     setHandleStatus({ available: null });
+    setErrorMessage(null);
   };
 
   // Sign-in identifier (accepts either username or email)
@@ -57,6 +57,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const [password, setPassword] = useState("");
 
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isCheckingHandle, setIsCheckingHandle] = useState(false);
   const [handleStatus, setHandleStatus] = useState<{
     available: boolean | null;
@@ -104,19 +105,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
 
     if (currentMode === "signin") {
-      if (!identifier.trim() || !password) {
-        toast.error("Please enter your username (or email) and password.");
+      const trimmedId = identifier.trim();
+      if (!trimmedId) {
+        setErrorMessage("Please enter your campus email.");
+        return;
+      }
+      if (!password) {
+        setErrorMessage("Please enter your password.");
         return;
       }
 
       setIsLoading(true);
-      const res = await authService.login(identifier, password, isMock);
+      const res = await authService.login(trimmedId, password, isMock);
       setIsLoading(false);
 
       if (res.error) {
-        toast.error(res.error.message);
+        const message = res.error.message || "Invalid campus email or password. Please try again.";
+        setErrorMessage(message);
+        toast.error(message);
         return;
       }
 
@@ -128,25 +137,26 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       // Sign-up validation
       const cleanHandle = handle.trim().toLowerCase();
       if (!cleanHandle) {
-        toast.error("Please choose a username.");
+        setErrorMessage("Please choose a username.");
         return;
       }
       if (!fullName.trim()) {
-        toast.error("Please enter your full name.");
+        setErrorMessage("Please enter your full name.");
         return;
       }
       if (!email.trim()) {
-        toast.error("Please enter your email.");
+        setErrorMessage("Please enter your campus email.");
         return;
       }
       if (!password || password.length < 6) {
-        toast.error("Password must be at least 6 characters.");
+        setErrorMessage("Password must be at least 6 characters.");
         return;
       }
 
       // Check handle status
       if (handleStatus.available === false) {
-        toast.error(handleStatus.error || "Please choose a valid and available username.");
+        const errorText = handleStatus.error || "Please choose a valid and available username.";
+        setErrorMessage(errorText);
         return;
       }
 
@@ -154,14 +164,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       if (handleStatus.available === null) {
         const val = authService.validateHandle(cleanHandle);
         if (!val.valid) {
-          toast.error(val.error || "Invalid username format.");
+          const errorText = val.error || "Invalid username format.";
+          setErrorMessage(errorText);
           return;
         }
         setIsLoading(true);
         const check = await authService.checkHandleAvailability(val.cleanHandle, isMock);
         if (!check.available) {
           setIsLoading(false);
-          toast.error(check.error || "This username is already taken.");
+          const errorText = check.error || "This username is already taken.";
+          setErrorMessage(errorText);
           return;
         }
       }
@@ -171,17 +183,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       setIsLoading(false);
 
       if (res.error) {
+        setErrorMessage(res.error.message);
         toast.error(res.error.message);
         return;
       }
 
       if (res.data) {
         if (res.data.requiresVerification) {
-          toast.info("Account created! Please check your email inbox to verify your account, then sign in.", {
-            duration: 6000,
+          toast.info("Account created! Please check your campus email inbox to verify your account, then sign in.", {
+            duration: 7000,
           });
           handleSetMode("signin");
-          setIdentifier(cleanHandle);
+          setIdentifier(email);
         } else {
           toast.success(`Account @${res.data.handle} created successfully!`);
           onSuccess(res.data);
@@ -190,40 +203,31 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     }
   };
 
-  const handleQuickFill = (presetEmail: string, presetPass: string) => {
-    setIdentifier(presetEmail);
-    setPassword(presetPass);
-    toast.info(`Filled test credentials for ${presetEmail}`);
-  };
-
   return (
-    <Card className="w-full shadow-md">
-      <CardHeader className="space-y-3 text-center pb-3">
-        {/* Sign In / Sign Up Tabs */}
-        <Tabs
-          value={currentMode}
-          onValueChange={(val) => handleSetMode(val as "signin" | "signup")}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="signin">Sign In</TabsTrigger>
-            <TabsTrigger value="signup">Sign Up</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        <div className="space-y-1">
-          <CardTitle className="text-xl font-bold tracking-tight">
-            {currentMode === "signin" ? "Login to your account" : "Create an account"}
-          </CardTitle>
-          <CardDescription className="text-xs text-muted-foreground">
-            {currentMode === "signin"
-              ? "Enter your username or email and password below"
-              : "Choose a unique username and register for CampusHub"}
-          </CardDescription>
-        </div>
+    <Card className="w-full shadow-sm border bg-card">
+      <CardHeader className="space-y-1.5 text-center pb-4">
+        <CardTitle className="text-xl font-semibold tracking-tight">
+          {currentMode === "signin" ? "Sign in to your account" : "Create an account"}
+        </CardTitle>
+        <CardDescription className="text-xs text-muted-foreground">
+          {currentMode === "signin"
+            ? "Enter your campus email and password below"
+            : "Enter your university credentials to get started"}
+        </CardDescription>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-4">
+        {/* Inline Feedback Banner */}
+        {errorMessage && (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          >
+            <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-destructive" />
+            <span className="font-medium leading-snug">{errorMessage}</span>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {currentMode === "signup" ? (
             <>
@@ -256,7 +260,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   type="text"
                   placeholder="unique_username"
                   value={handle}
-                  onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/\s+/g, "_"))}
+                  onChange={(e) => {
+                    setHandle(e.target.value.toLowerCase().replace(/\s+/g, "_"));
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                   autoComplete="username"
@@ -274,7 +281,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                   type="text"
                   placeholder="John Doe"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                 />
@@ -282,32 +292,40 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email">University Email</Label>
+                <Label htmlFor="email">Campus Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@university.edu"
+                  placeholder="student@college.edu"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
                   required
                   disabled={isLoading}
                 />
               </div>
             </>
           ) : (
-            /* Sign In: Identifier Field (Username or Email) */
+            /* Sign In: Campus Email Field */
             <div className="space-y-2">
-              <Label htmlFor="identifier">Username or Email</Label>
+              <Label htmlFor="identifier">Campus Email</Label>
               <Input
                 id="identifier"
-                type="text"
-                placeholder="username or email"
-                autoComplete="username"
+                type="email"
+                placeholder="student@college.edu"
+                autoComplete="email"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={(e) => {
+                  setIdentifier(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
                 required
                 disabled={isLoading}
+                aria-invalid={Boolean(errorMessage)}
+                className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
               />
             </div>
           )}
@@ -335,9 +353,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               placeholder={currentMode === "signup" ? "At least 6 characters" : undefined}
               autoComplete={currentMode === "signin" ? "current-password" : "new-password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errorMessage) setErrorMessage(null);
+              }}
               required
               disabled={isLoading}
+              aria-invalid={Boolean(errorMessage)}
+              className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
             />
           </div>
 
@@ -352,48 +375,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({
                 ? "Signing in..."
                 : "Creating account..."
               : currentMode === "signin"
-                ? "Sign In"
-                : "Create Account"}
+                ? "Sign in"
+                : "Create account"}
           </Button>
         </form>
 
-        {/* Quick Mock Role Fill Helper when running offline */}
-        {isMock && currentMode === "signin" && (
-          <div className="mt-4 pt-3 border-t text-center">
-            <div className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground mb-2">
-              <Sparkles className="h-3 w-3 text-amber-500" />
-              <span>Quick Test Logins (Mock Mode):</span>
-            </div>
-            <div className="flex justify-center gap-1.5 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2"
-                onClick={() => handleQuickFill("student@campushub.edu", "password123")}
-              >
-                Student
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2"
-                onClick={() => handleQuickFill("moderator@campushub.edu", "password123")}
-              >
-                Moderator
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs px-2"
-                onClick={() => handleQuickFill("admin@campushub.edu", "password123")}
-              >
-                Admin
-              </Button>
-            </div>
-          </div>
-        )}
-
-        <div className="mt-4 text-center text-xs">
+        <div className="mt-5 text-center text-xs">
           <span className="text-muted-foreground">
             {currentMode === "signin" ? "Don't have an account? " : "Already have an account? "}
           </span>

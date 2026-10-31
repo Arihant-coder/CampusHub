@@ -1,6 +1,7 @@
 /**
  * @file realService.ts
- * @description Direct Supabase client implementation of CommunitiesService.
+ * @description Direct Supabase client implementation of CommunitiesService with Storage CDN uploads,
+ *              atomic comment voting, query sanitization, and safe database-first deletions.
  * @owner Communities Team
  */
 
@@ -15,6 +16,14 @@ import type {
   ResourceType,
   GlobalSearchResult,
 } from "./types";
+import { uploadCommunityImage } from "../utils/storageUpload";
+
+/**
+ * Escapes PostgREST filter injection characters
+ */
+function sanitizeSearchQuery(query: string): string {
+  return query.trim().replace(/[%_(),]/g, "");
+}
 
 export const realCommunitiesService: CommunitiesService = {
   async getSubjectForums(): Promise<Result<SubjectForum[]>> {
@@ -31,13 +40,23 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      const forums: SubjectForum[] = (subjects || []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        code: s.code,
-        memberCount: 1200, // Estimated aggregate member count
-        isPinned: false,
-      }));
+      // Query enrollment counts for dynamic community sizing
+      const forums: SubjectForum[] = await Promise.all(
+        (subjects || []).map(async (s) => {
+          const { count } = await supabase
+            .from("user_subjects")
+            .select("*", { count: "exact", head: true })
+            .eq("subject_id", s.id);
+
+          return {
+            id: s.id,
+            name: s.name,
+            code: s.code,
+            memberCount: Math.max(1, count ?? 0),
+            isPinned: false,
+          };
+        })
+      );
 
       return { data: forums, error: null };
     } catch (err: unknown) {
@@ -48,7 +67,11 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
-  async getPosts(subjectId: string, sort: "new" | "top" | "hot" = "new", search?: string): Promise<Result<Post[]>> {
+  async getPosts(
+    subjectId: string,
+    sort: "new" | "top" | "hot" = "new",
+    search?: string
+  ): Promise<Result<Post[]>> {
     try {
       let query = supabase
         .from("posts")
@@ -56,7 +79,10 @@ export const realCommunitiesService: CommunitiesService = {
         .eq("subject_id", subjectId);
 
       if (search && search.trim()) {
-        query = query.ilike("title", `%${search.trim()}%`);
+        const clean = sanitizeSearchQuery(search);
+        if (clean) {
+          query = query.ilike("title", `%${clean}%`);
+        }
       }
 
       if (sort === "top") {
@@ -101,8 +127,8 @@ export const realCommunitiesService: CommunitiesService = {
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
         body: row.body,
-        imageUrl: row.image_url,
-        images: row.images || (row.image_url ? [row.image_url] : []),
+        images: row.images || [],
+        imageUrl: row.images?.[0] || null,
         upvotes: row.upvotes ?? 0,
         downvotes: row.downvotes ?? 0,
         replyCount: row.reply_count ?? 0,
@@ -158,8 +184,8 @@ export const realCommunitiesService: CommunitiesService = {
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
         body: row.body || "",
-        imageUrl: row.image_url || null,
-        images: row.images || (row.image_url ? [row.image_url] : []),
+        images: row.images || [],
+        imageUrl: row.images?.[0] || null,
         upvotes: row.upvotes ?? 0,
         downvotes: row.downvotes ?? 0,
         replyCount: row.reply_count ?? 0,
@@ -179,8 +205,8 @@ export const realCommunitiesService: CommunitiesService = {
 
   async searchGlobal(query: string): Promise<Result<GlobalSearchResult>> {
     try {
-      const trimmed = query.trim();
-      if (!trimmed) {
+      const clean = sanitizeSearchQuery(query);
+      if (!clean) {
         return { data: { forums: [], posts: [] }, error: null };
       }
 
@@ -188,7 +214,7 @@ export const realCommunitiesService: CommunitiesService = {
       const { data: subjectRows } = await supabase
         .from("subjects")
         .select("id, name, code, created_at")
-        .or(`name.ilike.%${trimmed}%,code.ilike.%${trimmed}%`)
+        .or(`name.ilike.%${clean}%,code.ilike.%${clean}%`)
         .order("name", { ascending: true })
         .limit(6);
 
@@ -196,7 +222,7 @@ export const realCommunitiesService: CommunitiesService = {
         id: s.id,
         name: s.name,
         code: s.code,
-        memberCount: 1000,
+        memberCount: 1,
         isPinned: false,
         description: "",
       }));
@@ -205,7 +231,7 @@ export const realCommunitiesService: CommunitiesService = {
       const { data: postRows } = await supabase
         .from("posts")
         .select("*, profiles!posts_author_id_fkey(handle, avatar_url), subjects(name)")
-        .ilike("title", `%${trimmed}%`)
+        .ilike("title", `%${clean}%`)
         .order("created_at", { ascending: false })
         .limit(10);
 
@@ -218,8 +244,8 @@ export const realCommunitiesService: CommunitiesService = {
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
         body: row.body || "",
-        imageUrl: row.image_url || null,
-        images: row.images || (row.image_url ? [row.image_url] : []),
+        images: row.images || [],
+        imageUrl: row.images?.[0] || null,
         upvotes: row.upvotes ?? 0,
         downvotes: row.downvotes ?? 0,
         replyCount: row.reply_count ?? 0,
@@ -271,17 +297,28 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      const images = data.images && data.images.length > 0
+      const rawImages = data.images && data.images.length > 0
         ? data.images
         : data.imageUrl
         ? [data.imageUrl]
         : [];
 
-      if (images.length > 5) {
+      if (rawImages.length > 5) {
         return {
           data: null,
           error: { code: "VALIDATION", message: "Maximum of 5 images allowed per post." },
         };
+      }
+
+      // Convert any base64 data URLs to permanent Supabase Storage CDN URLs
+      const uploadedImageUrls: string[] = [];
+      for (const img of rawImages) {
+        if (img.startsWith("data:") || img.startsWith("blob:")) {
+          const publicUrl = await uploadCommunityImage(img, user.id);
+          uploadedImageUrls.push(publicUrl);
+        } else {
+          uploadedImageUrls.push(img);
+        }
       }
 
       const { data: inserted, error } = await supabase
@@ -291,8 +328,7 @@ export const realCommunitiesService: CommunitiesService = {
           author_id: user.id,
           title: trimmedTitle,
           body: data.body ? data.body.trim() : "",
-          image_url: images[0] || null,
-          images: images,
+          images: uploadedImageUrls,
         })
         .select("*, profiles!posts_author_id_fkey(handle, avatar_url)")
         .single();
@@ -312,8 +348,8 @@ export const realCommunitiesService: CommunitiesService = {
         authorAvatarUrl: inserted.profiles?.avatar_url || null,
         title: inserted.title,
         body: inserted.body,
-        imageUrl: inserted.image_url,
-        images: images,
+        images: uploadedImageUrls,
+        imageUrl: uploadedImageUrls[0] || null,
         upvotes: 0,
         downvotes: 0,
         replyCount: 0,
@@ -330,7 +366,10 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
-  async votePost(postId: string, voteValue: 1 | -1 | null): Promise<Result<{ upvotes: number; downvotes: number; currentUserVote: 1 | -1 | null }>> {
+  async votePost(
+    postId: string,
+    voteValue: 1 | -1 | null
+  ): Promise<Result<{ upvotes: number; downvotes: number; currentUserVote: 1 | -1 | null }>> {
     try {
       const { error } = await supabase.rpc("vote_post", {
         p_post_id: postId,
@@ -344,7 +383,7 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      // Fetch refreshed post vote counters
+      // Refetch post vote counters
       const { data: postData } = await supabase
         .from("posts")
         .select("upvotes, downvotes")
@@ -367,6 +406,38 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
+  async deletePost(postId: string, imagePaths?: string[]): Promise<Result<boolean>> {
+    try {
+      // 1. Delete database row first
+      const { error: dbError } = await supabase
+        .from("posts")
+        .delete()
+        .eq("id", postId);
+
+      if (dbError) {
+        return { data: null, error: { code: "INTERNAL", message: dbError.message } };
+      }
+
+      // 2. Remove associated images from storage if paths provided
+      if (imagePaths && imagePaths.length > 0) {
+        const cleanPaths = imagePaths
+          .map((url) => {
+            const parts = url.split("/communities-images/");
+            return parts[1] || "";
+          })
+          .filter(Boolean);
+
+        if (cleanPaths.length > 0) {
+          await supabase.storage.from("communities-images").remove(cleanPaths);
+        }
+      }
+
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
   async getComments(postId: string): Promise<Result<Comment[]>> {
     try {
       const { data, error } = await supabase
@@ -382,6 +453,24 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
+      // Fetch user's comment votes
+      const user = (await supabase.auth.getUser()).data.user;
+      let userVotes: Record<string, 1 | -1> = {};
+      if (user && data && data.length > 0) {
+        const commentIds = data.map((c) => c.id);
+        const { data: votes } = await supabase
+          .from("comment_votes")
+          .select("comment_id, vote")
+          .eq("user_id", user.id)
+          .in("comment_id", commentIds);
+
+        if (votes) {
+          votes.forEach((v) => {
+            userVotes[v.comment_id] = v.vote as 1 | -1;
+          });
+        }
+      }
+
       const comments: Comment[] = (data || []).map((row: any) => ({
         id: row.id,
         postId: row.post_id,
@@ -394,6 +483,7 @@ export const realCommunitiesService: CommunitiesService = {
         images: row.image_urls || [],
         upvotes: row.upvotes ?? 0,
         downvotes: row.downvotes ?? 0,
+        currentUserVote: userVotes[row.id] ?? null,
         createdAt: row.created_at,
       }));
 
@@ -442,39 +532,16 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      // If parent is given, verify depth < 11
-      if (parentId) {
-        const { data: parentComment, error: parentError } = await supabase
-          .from("comments")
-          .select("id, post_id, depth")
-          .eq("id", parentId)
-          .single();
-
-        if (parentError || !parentComment) {
-          return {
-            data: null,
-            error: { code: "NOT_FOUND", message: "Parent comment not found" },
-          };
-        }
-
-        if (parentComment.post_id !== postId) {
-          return {
-            data: null,
-            error: {
-              code: "VALIDATION",
-              message: "Cannot reply to a comment belonging to another post.",
-            },
-          };
-        }
-
-        if (parentComment.depth >= 11) {
-          return {
-            data: null,
-            error: {
-              code: "VALIDATION",
-              message: "Maximum comment nesting depth (12 levels) reached.",
-            },
-          };
+      // Convert any base64 data URLs to Supabase Storage CDN URLs
+      const uploadedImageUrls: string[] = [];
+      if (images && images.length > 0) {
+        for (const img of images) {
+          if (img.startsWith("data:") || img.startsWith("blob:")) {
+            const publicUrl = await uploadCommunityImage(img, user.id);
+            uploadedImageUrls.push(publicUrl);
+          } else {
+            uploadedImageUrls.push(img);
+          }
         }
       }
 
@@ -486,8 +553,8 @@ export const realCommunitiesService: CommunitiesService = {
       if (parentId) {
         insertPayload.parent_id = parentId;
       }
-      if (images && images.length > 0) {
-        insertPayload.image_urls = images;
+      if (uploadedImageUrls.length > 0) {
+        insertPayload.image_urls = uploadedImageUrls;
       }
 
       const { data: inserted, error } = await supabase
@@ -512,7 +579,7 @@ export const realCommunitiesService: CommunitiesService = {
         authorHandle: inserted.profiles?.handle || "Anonymous",
         authorAvatarUrl: inserted.profiles?.avatar_url || null,
         body: inserted.body,
-        images: inserted.image_urls || [],
+        images: uploadedImageUrls,
         upvotes: 0,
         downvotes: 0,
         createdAt: inserted.created_at,
@@ -528,11 +595,75 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
-  async voteComment(commentId: string, voteValue: 1 | -1 | null): Promise<Result<{ upvotes: number; downvotes: number; currentUserVote: 1 | -1 | null }>> {
-    return {
-      data: { upvotes: 1, downvotes: 0, currentUserVote: voteValue },
-      error: null,
-    };
+  async voteComment(
+    commentId: string,
+    voteValue: 1 | -1 | null
+  ): Promise<Result<{ upvotes: number; downvotes: number; currentUserVote: 1 | -1 | null }>> {
+    try {
+      const { error } = await supabase.rpc("vote_comment", {
+        p_comment_id: commentId,
+        p_vote_value: voteValue,
+      });
+
+      if (error) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error.message },
+        };
+      }
+
+      const { data: commentData } = await supabase
+        .from("comments")
+        .select("upvotes, downvotes")
+        .eq("id", commentId)
+        .single();
+
+      return {
+        data: {
+          upvotes: commentData?.upvotes ?? 0,
+          downvotes: commentData?.downvotes ?? 0,
+          currentUserVote: voteValue,
+        },
+        error: null,
+      };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message },
+      };
+    }
+  },
+
+  async deleteComment(commentId: string, imagePaths?: string[]): Promise<Result<boolean>> {
+    try {
+      // 1. Delete database row first
+      const { error: dbError } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId);
+
+      if (dbError) {
+        return { data: null, error: { code: "INTERNAL", message: dbError.message } };
+      }
+
+      // 2. Remove images from storage
+      if (imagePaths && imagePaths.length > 0) {
+        const cleanPaths = imagePaths
+          .map((url) => {
+            const parts = url.split("/communities-images/");
+            return parts[1] || "";
+          })
+          .filter(Boolean);
+
+        if (cleanPaths.length > 0) {
+          await supabase.storage.from("communities-images").remove(cleanPaths);
+        }
+      }
+
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
   },
 
   async getResources(subjectId: string, type: ResourceType): Promise<Result<ResourceNote[]>> {
@@ -540,7 +671,8 @@ export const realCommunitiesService: CommunitiesService = {
       let query = supabase
         .from("notes")
         .select("*, profiles!notes_user_id_fkey(handle)")
-        .eq("subject_id", subjectId);
+        .eq("subject_id", subjectId)
+        .eq("is_shared", true);
 
       if (type === "PYQ") {
         query = query.eq("tag", "PYQ");
@@ -565,7 +697,8 @@ export const realCommunitiesService: CommunitiesService = {
           ? (row.description as any)
           : "Other",
         uploaderHandle: row.profiles?.handle || "Anonymous",
-        pageCount: 15,
+        pageCount: row.page_count ?? 1,
+        fileSizeBytes: row.file_size_bytes ?? 0,
         storagePath: row.storage_path,
         createdAt: row.created_at,
       }));
@@ -580,6 +713,7 @@ export const realCommunitiesService: CommunitiesService = {
   },
 
   async uploadResource(data): Promise<Result<ResourceNote>> {
+    let uploadedStoragePath: string | null = null;
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
@@ -589,39 +723,56 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      let storagePath = `resources/${data.subjectId}/${Date.now()}_${data.title}`;
-      if (data.file) {
-        const { error: uploadError } = await supabase.storage
-          .from("subject-notes")
-          .upload(`${user.id}/${data.file.name}`, data.file);
-        if (uploadError) {
-          return {
-            data: null,
-            error: { code: "INTERNAL", message: uploadError.message },
-          };
-        }
-        storagePath = `${user.id}/${data.file.name}`;
+      if (!data.file) {
+        return {
+          data: null,
+          error: { code: "VALIDATION", message: "Document PDF file is required." },
+        };
       }
 
-      const { data: inserted, error } = await supabase
+      // Safe clean filename without special characters
+      const cleanFileName = data.file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storagePath = `${user.id}/${Date.now()}_${cleanFileName}`;
+      uploadedStoragePath = storagePath;
+
+      // 1. Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from("subject-notes")
+        .upload(storagePath, data.file, {
+          contentType: "application/pdf",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: `Storage upload failed: ${uploadError.message}` },
+        };
+      }
+
+      // 2. Insert record into public.notes
+      const { data: inserted, error: insertError } = await supabase
         .from("notes")
         .insert({
           subject_id: data.subjectId,
           user_id: user.id,
-          title: data.title,
+          title: data.title.trim(),
           description: data.category || "Other",
           storage_path: storagePath,
           tag: data.type === "PYQ" ? "PYQ" : "Lecture",
           is_shared: true,
-          is_approved: false,
+          file_size_bytes: data.file.size,
+          page_count: data.pageCount || 1,
         })
         .select("*, profiles!notes_user_id_fkey(handle)")
         .single();
 
-      if (error) {
+      if (insertError) {
+        // Clean up orphaned storage object if database insert fails
+        await supabase.storage.from("subject-notes").remove([storagePath]);
         return {
           data: null,
-          error: { code: "INTERNAL", message: error.message },
+          error: { code: "INTERNAL", message: `Database insert failed: ${insertError.message}` },
         };
       }
 
@@ -632,12 +783,48 @@ export const realCommunitiesService: CommunitiesService = {
         type: inserted.tag === "PYQ" ? "PYQ" : "Note",
         category: data.category || "Other",
         uploaderHandle: inserted.profiles?.handle || "Anonymous",
-        pageCount: data.pageCount || 10,
+        pageCount: inserted.page_count ?? 1,
         storagePath: inserted.storage_path,
         createdAt: inserted.created_at,
       };
 
       return { data: note, error: null };
+    } catch (err: unknown) {
+      if (uploadedStoragePath) {
+        await supabase.storage.from("subject-notes").remove([uploadedStoragePath]).catch(() => {});
+      }
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message },
+      };
+    }
+  },
+
+  async deleteResource(resourceId: string, storagePath: string): Promise<Result<boolean>> {
+    try {
+      // 1. Delete database record FIRST
+      const { error: dbError } = await supabase
+        .from("notes")
+        .delete()
+        .eq("id", resourceId);
+
+      if (dbError) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: dbError.message },
+        };
+      }
+
+      // 2. Delete file from Supabase Storage API
+      const { error: storageError } = await supabase.storage
+        .from("subject-notes")
+        .remove([storagePath]);
+
+      if (storageError) {
+        console.warn("Storage removal warning:", storageError.message);
+      }
+
+      return { data: true, error: null };
     } catch (err: unknown) {
       return {
         data: null,

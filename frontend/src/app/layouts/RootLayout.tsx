@@ -37,7 +37,6 @@ import { ImageViewerProvider } from "@/lib/image-viewer-context";
 import { useResizable } from "@/lib/use-resizable";
 import { usePersistentToggle } from "@/lib/use-persistent-toggle";
 import { ResizeHandle } from "@/components/ui/resize-handle";
-import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/lib/auth-context";
 import { AvatarUploadDialog } from "@/features/auth/components/AvatarUploadDialog";
 
@@ -473,8 +472,6 @@ function RootLayoutContent() {
         >
           <Outlet />
         </main>
-
-        <Toaster position="bottom-right" richColors />
 
         {/* Profile Picture Upload Dialog */}
         <AvatarUploadDialog

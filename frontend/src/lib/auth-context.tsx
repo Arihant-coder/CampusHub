@@ -26,7 +26,7 @@ function mapSessionToProfile(userObj: any): UserProfile {
     handle: userObj.user_metadata?.handle || userObj.email?.split("@")[0] || "user",
     fullName: userObj.user_metadata?.full_name || null,
     avatarUrl: userObj.user_metadata?.avatar_url || null,
-    role: (userObj.user_metadata?.role as UserRole) || "student",
+    role: "student", // Strictly default fallback to student; privileged roles are resolved from public.profiles
     createdAt: userObj.created_at || new Date().toISOString(),
   };
 }
@@ -90,14 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen to live Supabase auth state changes if not in mock mode
     if (!isMock) {
       const { data: authListener } = supabase.auth.onAuthStateChange(
-        async (_event, session) => {
-          if (!session?.user) {
-            if (isMounted) setUser(null);
-            return;
-          }
+        (_event, session) => {
+          setTimeout(async () => {
+            if (!session?.user) {
+              if (isMounted) setUser(null);
+              return;
+            }
 
-          const profile = await authService.getLiveProfile(session.user.id);
-          if (isMounted) setUser(profile || mapSessionToProfile(session.user));
+            const profile = await authService.getLiveProfile(session.user.id);
+            if (isMounted) setUser(profile || mapSessionToProfile(session.user));
+          }, 0);
         }
       );
 
