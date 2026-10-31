@@ -5,6 +5,7 @@
  */
 
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Search, Plus, Filter, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import { UploadModal } from "./UploadModal";
 import type { ResourceNote, ResourceType, ResourceCategory } from "../services/types";
 
 interface ResourceArchiveProps {
+  subjectId?: string;
   notes: ResourceNote[];
   pyqs: ResourceNote[];
   isLoadingNotes: boolean;
@@ -34,6 +36,7 @@ interface ResourceArchiveProps {
 }
 
 export function ResourceArchive({
+  subjectId,
   notes,
   pyqs,
   isLoadingNotes,
@@ -41,6 +44,7 @@ export function ResourceArchive({
   subjectName,
   onUploadResource,
 }: ResourceArchiveProps) {
+  const navigate = useNavigate();
   const [subTab, setSubTab] = useState<"Notes" | "PYQs">("Notes");
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
@@ -128,14 +132,20 @@ export function ResourceArchive({
           </button>
         </div>
 
-        {/* Action Button: Submit Notes */}
+        {/* Action Button: Share Resource */}
         <Button
           size="sm"
-          onClick={() => setIsUploadOpen(true)}
+          onClick={() => {
+            if (subjectId) {
+              navigate(`/communities/${subjectId}/share`);
+            } else {
+              setIsUploadOpen(true);
+            }
+          }}
           className="h-8 gap-1.5 text-xs font-semibold shadow-xs"
         >
           <Plus className="h-3.5 w-3.5" />
-          <span>{subTab === "Notes" ? "Submit Notes" : "Submit PYQ"}</span>
+          <span>{subTab === "Notes" ? "Share Notes" : "Share PYQ"}</span>
         </Button>
       </div>
 

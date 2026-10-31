@@ -61,11 +61,31 @@ const mockQuestions: QuizQuestion[] = [
   },
 ];
 
-let mockStreak: UserStreak = {
-  currentStreak: 0,
-  bestStreak: 0,
-  lastCompletedDate: null,
-};
+const STORAGE_KEY = "campushub:mock_quiz_streak";
+
+function loadStreak(): UserStreak {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw) as UserStreak;
+    }
+  } catch {
+    // Ignore storage errors
+  }
+  return {
+    currentStreak: 1,
+    bestStreak: 1,
+    lastCompletedDate: null,
+  };
+}
+
+function saveStreak(streak: UserStreak): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(streak));
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 const delay = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => {
@@ -90,10 +110,20 @@ export const mockDailyQuizService: DailyQuizService = {
   ): Promise<Result<QuizSubmissionResult>> {
     await delay(300);
 
-    const score = mockQuestions.reduce((total, question) => {
-      return total +
-        (answers[question.id] === question.correctAnswerIndex ? 1 : 0);
-    }, 0);
+    const streak = loadStreak();
+
+    const details: Record<string, { isCorrect: boolean; correctAnswerIndex: number; explanation: string }> = {};
+    let score = 0;
+
+    mockQuestions.forEach((question) => {
+      const isCorrect = answers[question.id] === question.correctAnswerIndex;
+      if (isCorrect) score += 1;
+      details[question.id] = {
+        isCorrect,
+        correctAnswerIndex: question.correctAnswerIndex ?? 0,
+        explanation: question.explanation ?? "",
+      };
+    });
 
     const total = mockQuestions.length;
     const today = new Date().toISOString().slice(0, 10);
@@ -102,25 +132,27 @@ export const mockDailyQuizService: DailyQuizService = {
       .toISOString()
       .slice(0, 10);
 
-    if (mockStreak.lastCompletedDate !== today) {
-      mockStreak.currentStreak =
-        mockStreak.lastCompletedDate === yesterday
-          ? mockStreak.currentStreak + 1
+    if (streak.lastCompletedDate !== today) {
+      streak.currentStreak =
+        streak.lastCompletedDate === yesterday
+          ? streak.currentStreak + 1
           : 1;
 
-      mockStreak.bestStreak = Math.max(
-        mockStreak.bestStreak,
-        mockStreak.currentStreak,
+      streak.bestStreak = Math.max(
+        streak.bestStreak,
+        streak.currentStreak,
       );
 
-      mockStreak.lastCompletedDate = today;
+      streak.lastCompletedDate = today;
+      saveStreak(streak);
     }
 
     return {
       data: {
         score,
         total,
-        streakCount: mockStreak.currentStreak,
+        streakCount: streak.currentStreak,
+        details,
       },
       error: null,
     };
@@ -130,7 +162,7 @@ export const mockDailyQuizService: DailyQuizService = {
     await delay(200);
 
     return {
-      data: { ...mockStreak },
+      data: loadStreak(),
       error: null,
     };
   },

@@ -26,7 +26,7 @@ function mapSessionToProfile(userObj: any): UserProfile {
     handle: userObj.user_metadata?.handle || userObj.email?.split("@")[0] || "user",
     fullName: userObj.user_metadata?.full_name || null,
     avatarUrl: userObj.user_metadata?.avatar_url || null,
-    role: (userObj.user_metadata?.role as UserRole) || "student",
+    role: "student", // Strictly default fallback to student; privileged roles are resolved from public.profiles
     createdAt: userObj.created_at || new Date().toISOString(),
   };
 }
@@ -44,8 +44,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     async function initAuth() {
       try {
         if (isMock) {
-          // 1. Check if VITE_MOCK_ROLE is specified in .env.local to skip login
-          if (mockRoleEnv && mockRoleEnv.trim()) {
+          // 1. Check for active cached mock session in localStorage first (user's explicit session)
+          const cached = authService.getCachedMockUser();
+          if (cached && isMounted) {
+            setUser(cached);
+            setIsLoading(false);
+            return;
+          }
+
+          // 2. Check if VITE_MOCK_ROLE is specified in .env.local to skip login
+          // (Only if the user did not explicitly sign out in this browser tab)
+          const isSignedOut = sessionStorage.getItem("campushub:signed_out") === "true";
+          if (mockRoleEnv && mockRoleEnv.trim() && !isSignedOut) {
             const autoUser = authService.getAutoMockUser(mockRoleEnv.trim());
             if (autoUser && isMounted) {
               setUser(autoUser);
@@ -54,11 +64,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
 
-          // 2. Otherwise check for active cached mock session in localStorage
-          const cached = authService.getCachedMockUser();
-          if (cached && isMounted) {
-            setUser(cached);
-          }
           if (isMounted) {
             setIsLoading(false);
           }
@@ -85,14 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen to live Supabase auth state changes if not in mock mode
     if (!isMock) {
       const { data: authListener } = supabase.auth.onAuthStateChange(
-        async (_event, session) => {
-          if (!session?.user) {
-            if (isMounted) setUser(null);
-            return;
-          }
+        (_event, session) => {
+          setTimeout(async () => {
+            if (!session?.user) {
+              if (isMounted) setUser(null);
+              return;
+            }
 
-          const profile = await authService.getLiveProfile(session.user.id);
-          if (isMounted) setUser(profile || mapSessionToProfile(session.user));
+            const profile = await authService.getLiveProfile(session.user.id);
+            if (isMounted) setUser(profile || mapSessionToProfile(session.user));
+          }, 0);
         }
       );
 
@@ -108,6 +115,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [isMock, mockRoleEnv]);
 
   const setAuthUser = (profile: UserProfile | null) => {
+    if (profile) {
+      sessionStorage.removeItem("campushub:signed_out");
+    }
     setUser(profile);
   };
 
@@ -116,6 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    sessionStorage.setItem("campushub:signed_out", "true");
     if (isMock) {
       await authService.logout(true);
     } else {

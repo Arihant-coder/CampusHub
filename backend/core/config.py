@@ -1,15 +1,15 @@
 from typing import List, Union
 import json
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     environment: str = "development"
+    allow_mock_tokens: bool = False
     supabase_url: str = "https://placeholder.supabase.co"
     supabase_anon_key: str = "placeholder-anon-key"
-    supabase_jwt_secret: str = "super-secret-placeholder-jwt-key-for-local-dev-only-32chars"
-    gemini_api_key: str = ''
+    gemini_api_key: str = ""
     gemini_model: str = "gemini-3.8-flash"
     allowed_origins: Union[List[str], str] = ["http://localhost:5173"]
 

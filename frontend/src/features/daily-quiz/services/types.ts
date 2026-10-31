@@ -10,8 +10,8 @@ export interface QuizQuestion {
   id: string;
   question: string;
   options: string[];
-  correctAnswerIndex: number;
-  explanation: string;
+  correctAnswerIndex?: number;
+  explanation?: string;
 }
 
 export interface TodayQuizResponse {
@@ -19,10 +19,17 @@ export interface TodayQuizResponse {
   questions: QuizQuestion[];
 }
 
+export interface QuestionFeedbackItem {
+  isCorrect: boolean;
+  correctAnswerIndex: number;
+  explanation: string;
+}
+
 export interface QuizSubmissionResult {
   score: number;
   total: number;
   streakCount: number;
+  details?: Record<string, QuestionFeedbackItem>;
 }
 
 export interface UserStreak {
