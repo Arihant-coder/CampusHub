@@ -83,6 +83,19 @@ export async function listStudyMaterials(subjectId: string): Promise<UploadedStu
   return (await response.json()) as UploadedStudyMaterial[];
 }
 
+export async function clearStudyMaterials(subjectId: string): Promise<void> {
+  const token = await getAuthToken();
+  const query = new URLSearchParams({ subject_id: subjectId });
+  const response = await fetch(
+    `${BACKEND_URL}/api/v1/subjects-ai/materials?${query.toString()}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  if (!response.ok) throw await readError(response);
+}
+
 export async function uploadStudyMaterial(
   subjectId: string,
   file: File,

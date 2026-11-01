@@ -55,6 +55,9 @@ async def get_current_user(
             audience="authenticated",
         )
         payload["id"] = payload.get("sub") or payload.get("id") or "authenticated-user"
+        # Internal-only field used by Supabase's PostgREST client so table RLS
+        # evaluates this request as the same authenticated user.
+        payload["_access_token"] = token
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(

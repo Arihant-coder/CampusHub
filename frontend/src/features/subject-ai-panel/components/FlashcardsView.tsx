@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   RotateCw,
-  Shuffle,
   Sparkles,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   generateFlashcards,
-  type GeneratedFlashcard,
   type GeneratedFlashcardDeck,
 } from "../services/studyTools";
+import { SavedStudyFilesList } from "./SavedStudyFilesList";
+import type { SavedStudyFile } from "../services/savedStudyFiles";
 
 interface Props {
   subjectId: string;
@@ -21,6 +25,13 @@ interface Props {
   selectedMaterialIds: string[];
   deck: GeneratedFlashcardDeck | null;
   onDeckGenerated: (deck: GeneratedFlashcardDeck) => void;
+  savedFiles: SavedStudyFile[];
+  activeFileId: string | null;
+  onOpenFile: (id: string) => void;
+  onRenameFile: (file: SavedStudyFile) => void;
+  onDeleteFile: (id: string) => void;
+  isFileOpen: boolean;
+  onCloseFile: () => void;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -35,6 +46,13 @@ export function FlashcardsView({
   selectedMaterialIds,
   deck,
   onDeckGenerated,
+  savedFiles,
+  activeFileId,
+  onOpenFile,
+  onRenameFile,
+  onDeleteFile,
+  isFileOpen,
+  onCloseFile,
 }: Props) {
   const [topic, setTopic] = useState("");
   const [count, setCount] = useState("10");
@@ -43,17 +61,29 @@ export function FlashcardsView({
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
-  const [shuffledCards, setShuffledCards] =
-    useState<GeneratedFlashcard[] | null>(null);
+  const [isFileExpanded, setIsFileExpanded] = useState(false);
 
-  const cards = shuffledCards ?? deck?.cards ?? [];
+  const cards = deck?.cards ?? [];
   const currentCard = cards[currentIndex];
 
   useEffect(() => {
     setCurrentIndex(0);
     setIsFlipped(false);
-    setShuffledCards(null);
   }, [deck]);
+
+  useEffect(() => {
+    if (!isFileOpen) setIsFileExpanded(false);
+  }, [isFileOpen]);
+
+  useEffect(() => {
+    if (!isFileExpanded) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isFileExpanded]);
 
   async function handleGenerate() {
     if (isGenerating) return;
@@ -77,7 +107,6 @@ export function FlashcardsView({
       onDeckGenerated(generatedDeck);
       setCurrentIndex(0);
       setIsFlipped(false);
-      setShuffledCards(null);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -97,20 +126,90 @@ export function FlashcardsView({
     );
   }
 
-  function handleShuffle() {
-    setIsFlipped(false);
-    setShuffledCards(
-      [...cards].sort(() => Math.random() - 0.5),
-    );
-    setCurrentIndex(0);
-  }
-
   function handleFlip() {
     setIsFlipped((previous) => !previous);
   }
 
+  const savedDeckViewer = deck && currentCard && (
+    <div className="flex h-full w-full flex-col border bg-background shadow-2xl">
+      <header className="flex shrink-0 items-center gap-3 border-b px-5 py-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-semibold">{deck.title}</h2>
+          <p className="text-xs text-muted-foreground">
+            {currentIndex + 1} of {cards.length} cards
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsFileExpanded((previous) => !previous)}
+          aria-label={isFileExpanded ? "Collapse viewer" : "Expand viewer"}
+          title={isFileExpanded ? "Collapse viewer" : "Expand viewer"}
+        >
+          {isFileExpanded ? (
+            <Minimize2 className="size-4" />
+          ) : (
+            <Maximize2 className="size-4" />
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onCloseFile}
+          aria-label="Close flashcard file"
+          title="Close viewer"
+        >
+          <X className="size-4" />
+        </Button>
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 overflow-y-auto p-5">
+        <button
+          type="button"
+          onClick={handleFlip}
+          className="flex min-h-[300px] w-full max-w-xl flex-col justify-between rounded-xl border bg-card p-6 text-left shadow-sm hover:border-primary/50"
+        >
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span className="font-semibold uppercase tracking-wider">
+              {isFlipped ? "Answer" : "Question"}
+            </span>
+            <span className="flex items-center gap-1">
+              <RotateCw className="size-3.5" /> Click to flip
+            </span>
+          </div>
+          <p className="whitespace-pre-line py-6 text-xl font-medium leading-relaxed">
+            {isFlipped ? currentCard.answer : currentCard.question}
+          </p>
+          <span className="text-right text-xs text-muted-foreground">
+            {isFlipped ? "Click to see question" : "Click to reveal answer"}
+          </span>
+        </button>
+        <div className="flex w-full max-w-xl items-center justify-between gap-2">
+          <Button
+            variant="outline"
+            onClick={handlePrevious}
+            disabled={cards.length < 2}
+          >
+            <ChevronLeft className="size-4" /> Previous
+          </Button>
+          <Button variant="outline" onClick={handleFlip}>
+            <RotateCw className="size-3.5" /> Flip
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleNext}
+            disabled={cards.length < 2}
+          >
+            Next <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
+    <div className="relative flex h-full min-h-0 flex-col overflow-y-auto">
       {/* Generation controls */}
       <section className="shrink-0 space-y-3 border-b p-3">
         <div>
@@ -171,7 +270,7 @@ export function FlashcardsView({
             ) : (
               <Sparkles className="size-3.5" />
             )}
-            {isGenerating ? "Generating…" : deck ? "Generate Again" : "Generate"}
+            {isGenerating ? "Generating…" : "Generate"}
           </Button>
         </div>
 
@@ -192,6 +291,14 @@ export function FlashcardsView({
         )}
       </section>
 
+      <SavedStudyFilesList
+        files={savedFiles}
+        activeFileId={activeFileId}
+        onOpen={onOpenFile}
+        onRename={onRenameFile}
+        onDelete={onDeleteFile}
+      />
+
       {/* Empty state */}
       {!deck && (
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
@@ -206,104 +313,23 @@ export function FlashcardsView({
         </div>
       )}
 
-      {/* Generated cards */}
-      {deck && currentCard && (
-        <>
-          <div className="flex items-center justify-between px-3 pb-2 pt-3">
-            <span className="truncate text-xs text-muted-foreground">
-              {deck.title}
-            </span>
-
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-7"
-                onClick={handleShuffle}
-                title="Shuffle cards"
-                disabled={cards.length < 2}
-              >
-                <Shuffle className="size-3.5" />
-              </Button>
-              <span>
-                {currentIndex + 1} / {cards.length}
-              </span>
-            </div>
-          </div>
-
-          <div className="mx-3 mb-3 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{
-                width: `${((currentIndex + 1) / cards.length) * 100}%`,
-              }}
-            />
-          </div>
-
-          <div className="flex flex-1 flex-col justify-center p-3">
-            <button
-              type="button"
-              onClick={handleFlip}
-              className="flex min-h-[220px] w-full flex-col justify-between rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-colors hover:border-primary/50 hover:shadow-md"
-            >
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span className="font-semibold uppercase tracking-wider">
-                  {isFlipped ? "Answer" : "Question"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <RotateCw className="size-3.5" />
-                  Click to flip
-                </span>
+      {isFileOpen && savedDeckViewer &&
+        (isFileExpanded
+          ? createPortal(
+              <div className="fixed inset-0 z-[100] flex h-dvh w-screen items-center justify-center bg-background/30 p-3 backdrop-blur-md sm:p-6 lg:p-8">
+                <div className="h-full max-h-[900px] w-full max-w-[1440px] overflow-hidden rounded-2xl border bg-background shadow-2xl">
+                  {savedDeckViewer}
+                </div>
+              </div>,
+              document.body,
+            )
+          : (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/70 p-3 backdrop-blur-sm">
+                <div className="h-full max-h-full w-full overflow-hidden rounded-2xl border bg-background shadow-2xl">
+                  {savedDeckViewer}
+                </div>
               </div>
-
-              <p className="whitespace-pre-line py-5 text-base font-medium leading-relaxed text-foreground">
-                {isFlipped ? currentCard.answer : currentCard.question}
-              </p>
-
-              <span className="text-right text-[11px] text-muted-foreground">
-                {isFlipped
-                  ? "Click to see question"
-                  : "Click to reveal answer"}
-              </span>
-            </button>
-          </div>
-
-          <div className="flex shrink-0 items-center justify-between gap-2 p-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrevious}
-              disabled={cards.length < 2}
-              className="gap-1 text-xs"
-            >
-              <ChevronLeft className="size-4" />
-              Previous
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleFlip}
-              className="gap-1 text-xs"
-            >
-              <RotateCw className="size-3.5" />
-              Flip
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNext}
-              disabled={cards.length < 2}
-              className="gap-1 text-xs"
-            >
-              Next
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-        </>
-      )}
+            ))}
     </div>
   );
 }

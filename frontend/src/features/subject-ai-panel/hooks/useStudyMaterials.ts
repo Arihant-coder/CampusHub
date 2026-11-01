@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  clearStudyMaterials,
   deleteStudyMaterial,
   StudyMaterialApiError,
   uploadStudyMaterial,
@@ -13,31 +14,10 @@ export type StudyMaterial = UploadedStudyMaterial & {
   selected: boolean;
 };
 
-// Keep material metadata separately for each subject.
-const CACHE_PREFIX = "campushub:study-materials:v1:";
-
-// Memory cache also works when sessionStorage is unavailable.
+// Uploaded materials belong to this page session and are cleared on refresh.
 const materialCache = new Map<string, StudyMaterial[]>();
-
-function cacheKey(subjectId: string): string {
-  return `${CACHE_PREFIX}${subjectId}`;
-}
-
-function isStudyMaterial(value: unknown): value is StudyMaterial {
-  if (!value || typeof value !== "object") return false;
-
-  const item = value as Record<string, unknown>;
-
-  return (
-    typeof item.id === "string" &&
-    typeof item.title === "string" &&
-    (item.kind === "pdf" || item.kind === "text") &&
-    typeof item.mime_type === "string" &&
-    typeof item.size_bytes === "number" &&
-    typeof item.created_at === "string" &&
-    typeof item.selected === "boolean"
-  );
-}
+const sessionInitialization = new Map<string, Promise<void>>();
+const initializedSubjects = new Set<string>();
 
 function loadCachedMaterials(subjectId: string): StudyMaterial[] {
   if (!subjectId) return [];
@@ -46,25 +26,8 @@ function loadCachedMaterials(subjectId: string): StudyMaterial[] {
 
   if (cached !== undefined) return cached;
 
-  try {
-    const raw = window.sessionStorage.getItem(cacheKey(subjectId));
-
-    if (!raw) {
-      materialCache.set(subjectId, []);
-      return [];
-    }
-
-    const parsed: unknown = JSON.parse(raw);
-
-    const materials = Array.isArray(parsed)
-      ? parsed.filter(isStudyMaterial).slice(0, MAX_STUDY_MATERIALS)
-      : [];
-
-    materialCache.set(subjectId, materials);
-    return materials;
-  } catch {
-    return [];
-  }
+  materialCache.set(subjectId, []);
+  return [];
 }
 
 function saveCachedMaterials(
@@ -72,15 +35,25 @@ function saveCachedMaterials(
   materials: StudyMaterial[],
 ): void {
   materialCache.set(subjectId, materials);
+}
 
-  try {
-    window.sessionStorage.setItem(
-      cacheKey(subjectId),
-      JSON.stringify(materials),
-    );
-  } catch {
-    // The in-memory cache still works if sessionStorage is unavailable.
-  }
+function initializeSubjectSession(subjectId: string): Promise<void> {
+  const existing = sessionInitialization.get(subjectId);
+  if (existing) return existing;
+
+  // The first mount in a fresh browser runtime clears uploads left by the
+  // previous page session (and legacy persistent records on the backend).
+  saveCachedMaterials(subjectId, []);
+  const initialization = clearStudyMaterials(subjectId)
+    .then(() => {
+      initializedSubjects.add(subjectId);
+    })
+    .catch((error: unknown) => {
+      sessionInitialization.delete(subjectId);
+      throw error;
+    });
+  sessionInitialization.set(subjectId, initialization);
+  return initialization;
 }
 
 function errorMessage(error: unknown): string {
@@ -98,27 +71,56 @@ export function useStudyMaterials(subjectId: string) {
     () => loadCachedMaterials(subjectId),
   );
 
-  const [isLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(Boolean(subjectId));
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const activeSubjectIdRef = useRef(subjectId);
 
-  // Restore this subject's cached list, without contacting the backend.
+  // Do not restore backend or browser-cached uploads on mount. A refresh starts
+  // with an empty tray, and uploads are kept only in this page's memory.
   useEffect(() => {
     activeSubjectIdRef.current = subjectId;
-    setMaterials(loadCachedMaterials(subjectId));
     setError(null);
     setUploadingFile(null);
     setRemovingId(null);
+    if (!subjectId) {
+      setIsLoading(false);
+      return;
+    }
+
+    if (initializedSubjects.has(subjectId)) {
+      setMaterials(loadCachedMaterials(subjectId));
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    let isCurrent = true;
+    void initializeSubjectSession(subjectId)
+      .then(() => {
+        if (!isCurrent) return;
+        setMaterials([]);
+        setIsLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (!isCurrent) return;
+        setMaterials([]);
+        setError(errorMessage(err));
+        setIsLoading(false);
+      });
+
+    return () => {
+      isCurrent = false;
+    };
   }, [subjectId]);
 
   const addFiles = useCallback(
     async (files: File[]) => {
       const requestedSubjectId = subjectId;
 
-      if (!requestedSubjectId || uploadingFile) return;
+      if (!requestedSubjectId || uploadingFile || isLoading) return;
 
       setError(null);
 
@@ -182,7 +184,7 @@ export function useStudyMaterials(subjectId: string) {
         setError(errors.join(" "));
       }
     },
-    [subjectId, uploadingFile],
+    [isLoading, subjectId, uploadingFile],
   );
 
   const removeMaterial = useCallback(

@@ -5,6 +5,8 @@ from core.rate_limit import rate_limit
 from core.security import get_current_user
 from .materials import (
     MAX_FILE_BYTES,
+    clear_study_materials,
+    get_owned_study_materials,
     list_study_materials,
     remove_study_material,
     upload_study_material,
@@ -32,23 +34,27 @@ router = APIRouter(
 
 
 @router.post("/chat", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+    materials = get_owned_study_materials(current_user, req.subject_id, req.material_ids)
     reply = generate_reply(
         req.subject_id,
         req.messages,
         req.documents,
+        materials,
         subject_name=req.subject_name,
     )
     return ChatResponse(reply=reply)
 
 
 @router.post("/chat/stream")
-def chat_stream(req: ChatRequest):
+def chat_stream(req: ChatRequest, current_user: dict = Depends(get_current_user)):
+    materials = get_owned_study_materials(current_user, req.subject_id, req.material_ids)
     return StreamingResponse(
         stream_reply(
             req.subject_id,
             req.messages,
             req.documents,
+            materials,
             subject_name=req.subject_name,
         ),
         media_type="text/event-stream",
@@ -66,6 +72,16 @@ def get_materials(
 ):
     """List this user's unexpired materials for one subject from process memory."""
     return list_study_materials(current_user, subject_id)
+
+
+@router.delete("/materials")
+def clear_materials(
+    subject_id: str = Query(min_length=1, max_length=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Clear temporary uploads and remove legacy persisted references."""
+    clear_study_materials(current_user, subject_id)
+    return {"cleared": True}
 
 
 @router.post("/materials")

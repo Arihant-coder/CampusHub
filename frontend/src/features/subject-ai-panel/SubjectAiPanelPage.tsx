@@ -10,6 +10,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ReactNode,
 } from "react";
 
 import { useParams } from "react-router-dom";
@@ -26,10 +27,12 @@ import {
 
 import { useStudyMaterials } from "./hooks/useStudyMaterials";
 
-import type {
-  GeneratedFlashcardDeck,
-  GeneratedQuiz,
-} from "./services/studyTools";
+import {
+  createSavedStudyFile,
+  loadSavedStudyFiles,
+  saveSavedStudyFiles,
+  type SavedStudyFile,
+} from "./services/savedStudyFiles";
 
 const BOT_NAME = "Study Assistant";
 
@@ -59,14 +62,65 @@ export default function SubjectAiPanelPage({
   // Shared materials for the active subject.
   const materials = useStudyMaterials(subjectId ?? "");
 
-  // Generated content is stored separately for each subject.
-  const [flashcardDecks, setFlashcardDecks] = useState<
-    Record<string, GeneratedFlashcardDeck>
-  >({});
+  const [savedFiles, setSavedFiles] = useState<SavedStudyFile[]>(() =>
+    subjectId ? loadSavedStudyFiles(subjectId) : [],
+  );
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+  const [isSavedFileOpen, setIsSavedFileOpen] = useState(false);
 
-  const [quizzes, setQuizzes] = useState<
-    Record<string, GeneratedQuiz>
-  >({});
+  useEffect(() => {
+    if (!subjectId) return;
+    const files = loadSavedStudyFiles(subjectId);
+    setSavedFiles(files);
+    setActiveFileId(files[0]?.id ?? null);
+  }, [subjectId]);
+
+  useEffect(() => {
+    if (subjectId) saveSavedStudyFiles(subjectId, savedFiles);
+  }, [savedFiles, subjectId]);
+
+  const activeFile = savedFiles.find((file) => file.id === activeFileId);
+  const activeFlashcardDeck =
+    activeFile?.kind === "flashcards" ? activeFile.content : null;
+  const activeQuiz = activeFile?.kind === "quiz" ? activeFile.content : null;
+
+  function addSavedFile(file: SavedStudyFile) {
+    setSavedFiles((previous) => [file, ...previous]);
+    setActiveFileId(file.id);
+    setIsSavedFileOpen(false);
+  }
+
+  function openSavedFile(fileId: string) {
+    setActiveFileId(fileId);
+    setIsSavedFileOpen(true);
+  }
+
+  function renameFile(file: SavedStudyFile) {
+    const nextName = window.prompt("Rename file", file.name)?.trim();
+    if (!nextName) return;
+    setSavedFiles((previous) =>
+      previous.map((item) =>
+        item.id === file.id ? { ...item, name: nextName } : item,
+      ),
+    );
+  }
+
+  function deleteFile(fileId: string) {
+    setSavedFiles((previous) => previous.filter((file) => file.id !== fileId));
+    setActiveFileId((current) => (current === fileId ? null : current));
+    setIsSavedFileOpen(false);
+  }
+
+  const filesForTool = savedFiles.filter((file) =>
+    activeTool === "quiz" ? file.kind === "quiz" : file.kind === "flashcards",
+  );
+
+  useEffect(() => {
+    if (activeTool === "chat") return;
+    if (!filesForTool.some((file) => file.id === activeFileId)) {
+      setActiveFileId(filesForTool[0]?.id ?? null);
+    }
+  }, [activeFileId, activeTool, filesForTool]);
 
   // Shared Study Materials UI state.
   const [materialsExpanded, setMaterialsExpanded] = useState(
@@ -222,53 +276,54 @@ export default function SubjectAiPanelPage({
 
       {/* FLASHCARDS */}
       {activeTool === "flashcards" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden">
+        <StudyToolWorkspace
+        >
             <FlashcardsView
               subjectId={subjectId}
               subjectName={subjectName}
               selectedMaterialIds={materials.selectedMaterialIds}
-              deck={flashcardDecks[subjectId] ?? null}
-              onDeckGenerated={(deck) => {
-                setFlashcardDecks((previous) => ({
-                  ...previous,
-                  [subjectId]: deck,
-                }));
-              }}
+              deck={activeFlashcardDeck}
+              onDeckGenerated={(deck) => addSavedFile(createSavedStudyFile("flashcards", deck))}
+              savedFiles={filesForTool}
+              activeFileId={activeFile?.kind === "flashcards" ? activeFile.id : null}
+              onOpenFile={openSavedFile}
+              onRenameFile={renameFile}
+              onDeleteFile={deleteFile}
+              isFileOpen={isSavedFileOpen}
+              onCloseFile={() => setIsSavedFileOpen(false)}
             />
-          </div>
-
-          <StudyMaterialsTray
-            {...studyMaterialsProps}
-            showAddButton={true}
-          />
-        </div>
+          <StudyMaterialsTray {...studyMaterialsProps} showAddButton={true} />
+        </StudyToolWorkspace>
       )}
 
       {/* QUIZ */}
       {activeTool === "quiz" && (
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden">
+        <StudyToolWorkspace
+        >
             <QuizView
               subjectId={subjectId}
               subjectName={subjectName}
               selectedMaterialIds={materials.selectedMaterialIds}
-              quiz={quizzes[subjectId] ?? null}
-              onQuizGenerated={(quiz) => {
-                setQuizzes((previous) => ({
-                  ...previous,
-                  [subjectId]: quiz,
-                }));
+              quiz={activeQuiz}
+              onQuizGenerated={(quiz) => addSavedFile(createSavedStudyFile("quiz", quiz))}
+              savedFiles={filesForTool}
+              activeFileId={activeFile?.kind === "quiz" ? activeFile.id : null}
+              onOpenFile={(fileId) => {
+                setActiveFileId(fileId);
+                setIsSavedFileOpen(true);
               }}
+              onRenameFile={renameFile}
+              onDeleteFile={deleteFile}
+              isFileOpen={isSavedFileOpen}
+              onCloseFile={() => setIsSavedFileOpen(false)}
             />
-          </div>
-
-          <StudyMaterialsTray
-            {...studyMaterialsProps}
-            showAddButton={true}
-          />
-        </div>
+          <StudyMaterialsTray {...studyMaterialsProps} showAddButton={true} />
+        </StudyToolWorkspace>
       )}
     </div>
   );
+}
+
+function StudyToolWorkspace({ children }: { children: ReactNode }) {
+  return <div className="flex min-h-0 flex-1 flex-col bg-background">{children}</div>;
 }

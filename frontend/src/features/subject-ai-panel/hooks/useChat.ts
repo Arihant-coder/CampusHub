@@ -105,7 +105,8 @@ function updateSubjectState(
 async function runStream(
   subjectId: string,
   subjectName: string | undefined,
-  base: UiMessage[]
+  base: UiMessage[],
+  materialIds: string[],
 ) {
   if (!subjectId) return;
 
@@ -130,6 +131,7 @@ async function runStream(
       subjectId,
       subjectName,
       messages: history,
+      materialIds,
       signal: controller.signal,
     })) {
       if (ev.type === "token") {
@@ -193,17 +195,17 @@ export function useChat(subjectId: string, subjectName?: string) {
   const { messages, isStreaming } = state;
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, materialIds: string[] = []) => {
       const content = text.trim();
       if (!content || isStreaming) return;
       const userMsg: UiMessage = { id: crypto.randomUUID(), role: "user", content };
-      await runStream(subjectId, subjectName, [...messages, userMsg]);
+      await runStream(subjectId, subjectName, [...messages, userMsg], materialIds);
     },
     [subjectId, subjectName, messages, isStreaming],
   );
 
   // Re-answers the last question. Also used by "Try again" on an error bubble.
-  const regenerate = useCallback(async () => {
+  const regenerate = useCallback(async (materialIds: string[] = []) => {
     if (isStreaming) return;
     let lastUser = -1;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -213,18 +215,18 @@ export function useChat(subjectId: string, subjectName?: string) {
       }
     }
     if (lastUser === -1) return;
-    await runStream(subjectId, subjectName, messages.slice(0, lastUser + 1));
+    await runStream(subjectId, subjectName, messages.slice(0, lastUser + 1), materialIds);
   }, [subjectId, subjectName, messages, isStreaming]);
 
   // Edits a previously sent question and re-runs the answer
   const edit = useCallback(
-    async (id: string, newText: string) => {
+    async (id: string, newText: string, materialIds: string[] = []) => {
       const content = newText.trim();
       if (!content || isStreaming) return;
       const index = messages.findIndex((m) => m.id === id);
       if (index === -1) return;
       const updatedUserMsg: UiMessage = { ...messages[index], content };
-      await runStream(subjectId, subjectName, [...messages.slice(0, index), updatedUserMsg]);
+      await runStream(subjectId, subjectName, [...messages.slice(0, index), updatedUserMsg], materialIds);
     },
     [subjectId, subjectName, messages, isStreaming],
   );

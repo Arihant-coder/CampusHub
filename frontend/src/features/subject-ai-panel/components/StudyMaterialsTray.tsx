@@ -82,7 +82,7 @@ export function StudyMaterialsTray({
   const isExpanded = expanded ?? localExpanded;
 
   const canAddMore =
-    materials.length < MAX_STUDY_MATERIALS && !uploadingFile;
+    materials.length < MAX_STUDY_MATERIALS && !uploadingFile && !isLoading;
 
   const selectedCount = materials.filter(
     (material) => material.selected,

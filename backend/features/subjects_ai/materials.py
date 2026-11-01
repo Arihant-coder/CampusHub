@@ -18,7 +18,9 @@ from threading import RLock
 from typing import Any, Literal
 
 from fastapi import HTTPException
+from supabase import Client, create_client
 
+from core.config import settings
 from .service import get_client
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,57 @@ class StoredStudyMaterial:
 # Process-local memory only: deliberately not Redis, disk, or Supabase Storage.
 _materials: dict[str, StoredStudyMaterial] = {}
 _lock = RLock()
+MATERIALS_TABLE = "subject_ai_study_materials"
+
+
+def _database(user: dict[str, Any]) -> Client | None:
+    """Create an RLS-scoped client from the JWT verified by get_current_user."""
+    access_token = user.get("_access_token")
+    if not access_token:
+        # Explicit local mock tokens have no Supabase session; keep their
+        # materials isolated in process memory for development.
+        return None
+    if not settings.supabase_url or not settings.supabase_anon_key:
+        raise HTTPException(status_code=503, detail="Supabase is not configured.")
+    client = create_client(settings.supabase_url, settings.supabase_anon_key)
+    client.postgrest.auth(str(access_token))
+    return client
+
+
+def _row_to_material(row: dict[str, Any]) -> StoredStudyMaterial:
+    expires_at = row.get("expires_at")
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    return StoredStudyMaterial(
+        id=str(row["id"]),
+        owner_id=str(row["user_id"]),
+        subject_id=str(row["subject_id"]),
+        title=str(row["title"]),
+        kind=row["kind"],
+        mime_type=str(row["mime_type"]),
+        size_bytes=int(row["size_bytes"]),
+        created_at=str(row["created_at"]),
+        text=row.get("text_content"),
+        gemini_file_name=row.get("gemini_file_name"),
+        gemini_file_uri=row.get("gemini_file_uri"),
+        expires_at=expires_at,
+    )
+
+
+def _get_database_materials(client: Client, subject_id: str) -> list[StoredStudyMaterial]:
+    try:
+        rows = (
+            client.table(MATERIALS_TABLE)
+            .select("*")
+            .eq("subject_id", subject_id)
+            .order("created_at")
+            .execute()
+            .data
+        )
+        return [_row_to_material(row) for row in rows]
+    except Exception as exc:
+        logger.exception("Failed to list study materials from Supabase")
+        raise HTTPException(status_code=503, detail="Could not access study materials. Please try again.") from exc
 
 
 def _now() -> datetime:
@@ -108,6 +161,47 @@ def list_study_materials(user: dict[str, Any], subject_id: str) -> list[dict[str
         return [_public(item) for item in items]
 
 
+def clear_study_materials(user: dict[str, Any], subject_id: str) -> None:
+    """Clear this user's temporary uploads for a subject and legacy records."""
+    owner_id = _owner_id(user)
+    removed: dict[str, StoredStudyMaterial] = {}
+
+    with _lock:
+        for material_id, material in list(_materials.items()):
+            if material.owner_id == owner_id and material.subject_id == subject_id:
+                removed[material_id] = _materials.pop(material_id)
+
+    # Remove rows created by older versions that persisted uploads in Supabase.
+    client = _database(user)
+    if client:
+        database_items = _get_database_materials(client, subject_id)
+        for material in database_items:
+            removed.setdefault(material.id, material)
+        if database_items:
+            try:
+                client.table(MATERIALS_TABLE).delete().eq(
+                    "subject_id", subject_id
+                ).execute()
+            except Exception as exc:
+                logger.exception("Failed to clear legacy study material records")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Could not clear previous study materials. Please try again.",
+                ) from exc
+
+    for material in removed.values():
+        if material.gemini_file_name:
+            try:
+                get_client().files.delete(name=material.gemini_file_name)
+            except Exception:
+                # Gemini expires uploaded files automatically after 48 hours.
+                logger.warning(
+                    "Could not delete cleared Gemini file %s",
+                    material.gemini_file_name,
+                    exc_info=True,
+                )
+
+
 def upload_study_material(
     user: dict[str, Any],
     subject_id: str,
@@ -131,12 +225,13 @@ def upload_study_material(
     owner_id = _owner_id(user)
     with _lock:
         current = _subject_items(owner_id, subject_id)
+    if current:
         if len(current) >= MAX_MATERIALS_PER_SUBJECT:
             raise HTTPException(
                 status_code=409,
                 detail=f"You can attach up to {MAX_MATERIALS_PER_SUBJECT} files to one subject.",
             )
-        current_text_chars = sum(len(item.text or "") for item in current)
+    current_text_chars = sum(len(item.text or "") for item in current)
 
     created_at = _now()
     material_id = secrets.token_urlsafe(18)

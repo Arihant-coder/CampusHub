@@ -55,6 +55,9 @@ export function ChatBody({
   const [showJump, setShowJump] = useState(false);
 
   const hasMaterials = studyMaterials.materials.length > 0;
+  const selectedMaterialIds = studyMaterials.materials
+    .filter((material) => material.selected)
+    .map((material) => material.id);
 
   clearRef.current = clear;
 
@@ -92,12 +95,12 @@ export function ChatBody({
 
   function handleSend(text: string) {
     stickRef.current = true;
-    void send(text);
+    void send(text, selectedMaterialIds);
   }
 
   function handleRegenerate() {
     stickRef.current = true;
-    void regenerate();
+    void regenerate(selectedMaterialIds);
   }
 
   // Register clear conversation action in parent header.
@@ -170,7 +173,7 @@ export function ChatBody({
                   }
                   onEdit={
                     message.role === "user" && !isStreaming
-                      ? (text) => void edit(message.id, text)
+                      ? (text) => void edit(message.id, text, selectedMaterialIds)
                       : undefined
                   }
                 />
