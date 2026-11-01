@@ -25,4 +25,5 @@ export interface SubjectViewerService {
   getNotesTree(subjectId: string): Promise<Result<SubjectNote[]>>;
   createTextNote(input: CreateTextNoteInput): Promise<Result<SubjectNote>>;
   updateTextNote(noteId: string, title: string, content: string): Promise<Result<SubjectNote>>;
+  deleteTextNote(noteId: string): Promise<Result<boolean>>;
 }

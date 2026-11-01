@@ -49,4 +49,9 @@ export const realSubjectViewerService: SubjectViewerService = {
     if (error) return { data: null, error: toError(error.message) };
     return { data: { id: data.id, subjectId: data.subject_id, title: data.title, tag: data.tag, storagePath: data.storage_path || null, content: data.content, createdAt: data.created_at }, error: null };
   },
+  async deleteTextNote(noteId): Promise<Result<boolean>> {
+    const { error } = await supabase.from("notes").delete().eq("id", noteId).eq("tag", "Private");
+    if (error) return { data: null, error: toError(error.message) };
+    return { data: true, error: null };
+  },
 };

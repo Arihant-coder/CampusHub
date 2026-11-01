@@ -18,14 +18,12 @@ import {
   LogOut,
   Camera,
   ShieldCheck,
-  ShieldAlert,
-  Mail,
-  User,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,13 +41,16 @@ import { ResizeHandle } from "@/components/ui/resize-handle";
 import { useAuth } from "@/lib/auth-context";
 import { AvatarUploadDialog } from "@/features/auth/components/AvatarUploadDialog";
 
-function getInitials(name?: string | null): string {
+function getInitials(name?: string | null, handle?: string): string {
   if (name) {
-    const parts = name.trim().split(/\s+/);
+    const parts = name.trim().split(" ");
     if (parts.length >= 2) {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
     return parts[0].slice(0, 2).toUpperCase();
+  }
+  if (handle) {
+    return handle.slice(0, 2).toUpperCase();
   }
   return "ST";
 }
@@ -116,15 +117,6 @@ function RootLayoutContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const displayEmail =
-    user?.email ||
-    (user?.handle === "morgan_t"
-      ? "moderator@campushub.edu"
-      : user?.handle === "sarah_vance"
-      ? "admin@campushub.edu"
-      : user?.handle === "alex_chen"
-      ? "student@campushub.edu"
-      : undefined);
   const { actions, title: customTitle, center } = useHeader();
 
   const { setTheme, resolvedTheme } = useTheme();
@@ -144,7 +136,7 @@ function RootLayoutContent() {
   });
 
   const pageTitle = customTitle || getPageTitle(location.pathname);
-  const isSubjectWorkspace = /^\/subjects\/[^/]+/.test(location.pathname);
+  const isSubjectWorkspace = location.pathname.startsWith("/subjects");
 
   const isStudentToolsActive = studentTools.some((tool) => location.pathname.startsWith(tool.to));
   const isSubjectsActive = location.pathname.startsWith("/subjects");
@@ -435,161 +427,85 @@ function RootLayoutContent() {
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:ring-2 hover:ring-primary/10"
+                  className="rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                   aria-label="User profile menu"
                 >
-                  <Avatar className="h-8 w-8 border border-border">
+                  <Avatar className="h-8 w-8 border">
                     {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.fullName || "User"} />}
                     <AvatarFallback className="text-xs font-semibold">
-                      {getInitials(user?.fullName)}
+                      {getInitials(user?.fullName, user?.handle)}
                     </AvatarFallback>
                   </Avatar>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[330px] p-3 shadow-2xl border-border/80 rounded-2xl bg-card">
-                <DropdownMenuLabel className="p-0 font-normal">
-                  {/* User Profile Info Header */}
-                  <div className="flex items-start gap-3.5 pb-2">
-                    <Avatar className="h-12 w-12 border border-border/80 shrink-0 shadow-xs">
-                      {user?.avatarUrl && (
-                        <AvatarImage src={user.avatarUrl} alt={user.fullName || "User"} />
-                      )}
-                      <AvatarFallback className="text-base font-semibold bg-primary/10 text-primary">
-                        {getInitials(user?.fullName)}
-                      </AvatarFallback>
-                    </Avatar>
-
-                    <div className="flex-1 min-w-0 space-y-0.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <h2 className="text-base font-bold text-foreground truncate tracking-tight">
-                          {user?.fullName || "Student User"}
-                        </h2>
-                        {user?.role === "admin" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-red-200/80 bg-red-50 px-2.5 py-0.5 text-xs font-semibold text-red-600 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-400 shrink-0">
-                            <ShieldAlert className="size-3.5" />
-                            Admin
-                          </span>
-                        ) : user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-600 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-400 shrink-0">
-                            <ShieldCheck className="size-3.5" />
-                            Moderator
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground shrink-0">
-                            <GraduationCap className="size-3.5" />
-                            Student
-                          </span>
-                        )}
-                      </div>
-
-                      {displayEmail && (
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80 truncate pt-0.5">
-                          <Mail className="size-3.5 shrink-0 text-muted-foreground/80" />
-                          <span className="truncate">{displayEmail}</span>
-                        </div>
-                      )}
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-normal">
+                  <div className="flex flex-col space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold leading-none truncate max-w-[130px]">
+                        {user?.fullName || "Student User"}
+                      </p>
+                      <Badge
+                        variant={
+                          user?.role === "admin"
+                            ? "destructive"
+                            : user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-[10px] capitalize px-1.5 py-0"
+                      >
+                        {user?.role === "admin"
+                          ? "admin"
+                          : user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0
+                          ? `Moderator · ${user.moderatedSubjectIds.length} ${
+                              user.moderatedSubjectIds.length === 1 ? "community" : "communities"
+                            }`
+                          : "student"}
+                      </Badge>
                     </div>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      @{user?.handle || "student"}
+                    </p>
                   </div>
-
-                  {/* Moderator Scope Row */}
-                  {user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0 && (
-                    <div className="flex items-center justify-between text-xs pt-1.5 pb-1 gap-2">
-                      <span className="text-muted-foreground font-medium shrink-0">
-                        Moderator Scope
-                      </span>
-                      <div className="flex flex-wrap items-center gap-1 justify-end">
-                        {Array.from(new Set(user.moderatedSubjectIds)).map((id) => {
-                          const sub = subjects.find((s) => s.id.toLowerCase() === id.toLowerCase());
-                          return (
-                            <span
-                              key={id}
-                              className="font-mono text-[11px] px-2 py-0.5 rounded-md font-medium bg-muted/70 text-foreground border border-border/60"
-                            >
-                              {sub?.code || id.toUpperCase()}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </DropdownMenuLabel>
-
-                <DropdownMenuSeparator className="my-2" />
-
-                {/* Navigation and Action Items */}
-                <div className="space-y-0.5">
-                  {user?.role === "admin" && (
-                    <DropdownMenuItem
-                      className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
-                      onClick={() => navigate("/admin/moderators")}
-                    >
-                      <div className="flex items-start gap-3 min-w-0">
-                        <ShieldAlert className="size-4 text-destructive shrink-0 mt-0.5" />
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-foreground leading-tight">
-                            Moderator Admin
-                          </span>
-                          <span className="text-xs text-muted-foreground mt-0.5">
-                            Manage community moderators
-                          </span>
-                        </div>
-                      </div>
-                    </DropdownMenuItem>
-                  )}
-
-                  {(user?.role === "admin" ||
-                    (user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0)) && (
-                    <DropdownMenuItem
-                      className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
-                      onClick={() => navigate("/communities/moderation")}
-                    >
-                      <div className="flex items-start gap-3 min-w-0">
-                        <ShieldCheck className="size-4 text-foreground/80 shrink-0 mt-0.5" />
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-foreground leading-tight">
-                            Resource Moderation
-                          </span>
-                          <span className="text-xs text-muted-foreground mt-0.5">
-                            Review pending submissions & reports
-                          </span>
-                        </div>
-                      </div>
-                      <span className="size-2 rounded-full bg-blue-600 dark:bg-blue-400 shrink-0" />
-                    </DropdownMenuItem>
-                  )}
-
+                <DropdownMenuSeparator />
+                {user?.role === "admin" && (
                   <DropdownMenuItem
-                    className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
-                    onClick={() => setIsAvatarDialogOpen(true)}
+                    className="cursor-pointer"
+                    onClick={() => navigate("/admin/moderators")}
                   >
-                    <Camera className="size-4 text-foreground/80 shrink-0" />
-                    <span className="text-sm font-medium text-foreground">
-                      Change Profile Picture
-                    </span>
+                    <ShieldCheck className="mr-2 h-4 w-4 text-destructive" />
+                    <span>Moderator Admin</span>
                   </DropdownMenuItem>
-
+                )}
+                {(user?.role === "admin" ||
+                  (user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0)) && (
                   <DropdownMenuItem
-                    className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
-                    onClick={() => setIsAvatarDialogOpen(true)}
+                    className="cursor-pointer"
+                    onClick={() => navigate("/communities/moderation")}
                   >
-                    <User className="size-4 text-foreground/80 shrink-0" />
-                    <span className="text-sm font-medium text-foreground">
-                      Account Settings
-                    </span>
+                    <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
+                    <span>Resource Moderation</span>
                   </DropdownMenuItem>
-                </div>
-
-                <DropdownMenuSeparator className="my-2" />
-
+                )}
                 <DropdownMenuItem
-                  className="flex items-center gap-3 px-3 py-2 text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer rounded-lg font-medium transition-colors"
+                  className="cursor-pointer"
+                  onClick={() => setIsAvatarDialogOpen(true)}
+                >
+                  <Camera className="mr-2 h-4 w-4" />
+                  <span>Change Profile Picture</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive cursor-pointer"
                   onClick={async () => {
                     await logout();
                     navigate("/login", { replace: true });
                   }}
                 >
-                  <LogOut className="size-4 shrink-0" />
-                  <span className="text-sm">Sign Out</span>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Sign Out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

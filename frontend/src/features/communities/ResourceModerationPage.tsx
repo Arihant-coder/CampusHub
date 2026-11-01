@@ -60,6 +60,7 @@ export const ResourceModerationPage: React.FC = () => {
   // Filters & Sorting state
   const [selectedSubject, setSelectedSubject] = useState<string>(urlSubjectId || "all");
   const [typeFilter, setTypeFilter] = useState<"all" | ResourceType>("all");
+  const [reportTargetFilter, setReportTargetFilter] = useState<"all" | "post" | "comment">("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "size_desc" | "size_asc">("newest");
 
@@ -279,6 +280,45 @@ export const ResourceModerationPage: React.FC = () => {
     return result;
   }, [pendingNotes, typeFilter, searchQuery, sortBy]);
 
+  const filteredReports = useMemo(() => {
+    let result = [...reports];
+
+    if (reportTargetFilter !== "all") {
+      result = result.filter((r) => r.targetType === reportTargetFilter);
+    }
+
+    if (selectedSubject !== "all") {
+      result = result.filter((r) => r.subjectId === selectedSubject);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((r) => {
+        const reporter = (r.reporterName || r.reporterHandle || "").toLowerCase();
+        const reason = (r.reason || "").toLowerCase();
+        const author = (r.targetContent?.authorName || r.targetContent?.authorHandle || "").toLowerCase();
+        const title = (r.targetContent?.title || "").toLowerCase();
+        const body = (r.targetContent?.body || "").toLowerCase();
+        return (
+          reporter.includes(q) ||
+          reason.includes(q) ||
+          author.includes(q) ||
+          title.includes(q) ||
+          body.includes(q)
+        );
+      });
+    }
+
+    result.sort((a, b) => {
+      if (sortBy === "oldest") {
+        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return result;
+  }, [reports, reportTargetFilter, selectedSubject, searchQuery, sortBy]);
+
   const getSubjectName = (subjectId: string) => {
     const found = forums.find((f) => f.id === subjectId);
     return found ? found.name : subjectId.toUpperCase();
@@ -393,42 +433,80 @@ export const ResourceModerationPage: React.FC = () => {
             </SelectContent>
           </Select>
 
-          {/* Type Filter */}
-          <div className="flex items-center bg-secondary/80 rounded-md p-0.5 border text-xs">
-            <button
-              type="button"
-              onClick={() => setTypeFilter("all")}
-              className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                typeFilter === "all"
-                  ? "bg-background text-foreground shadow-xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setTypeFilter("Note")}
-              className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                typeFilter === "Note"
-                  ? "bg-background text-foreground shadow-xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Notes
-            </button>
-            <button
-              type="button"
-              onClick={() => setTypeFilter("PYQ")}
-              className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                typeFilter === "PYQ"
-                  ? "bg-background text-foreground shadow-xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              PYQs
-            </button>
-          </div>
+          {/* Context-aware Type Filter */}
+          {activeTab === "resources" ? (
+            <div className="flex items-center bg-secondary/80 rounded-md p-0.5 border text-xs">
+              <button
+                type="button"
+                onClick={() => setTypeFilter("all")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  typeFilter === "all"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter("Note")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  typeFilter === "Note"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Notes
+              </button>
+              <button
+                type="button"
+                onClick={() => setTypeFilter("PYQ")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  typeFilter === "PYQ"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                PYQs
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center bg-secondary/80 rounded-md p-0.5 border text-xs">
+              <button
+                type="button"
+                onClick={() => setReportTargetFilter("all")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  reportTargetFilter === "all"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportTargetFilter("post")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  reportTargetFilter === "post"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Posts
+              </button>
+              <button
+                type="button"
+                onClick={() => setReportTargetFilter("comment")}
+                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
+                  reportTargetFilter === "comment"
+                    ? "bg-background text-foreground shadow-xs font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Comments
+              </button>
+            </div>
+          )}
 
           {/* Search bar */}
           <div className="relative flex-1 min-w-[140px] max-w-[220px]">
@@ -466,7 +544,7 @@ export const ResourceModerationPage: React.FC = () => {
           <span className="text-xs">Loading moderation queue...</span>
         </div>
       ) : activeTab === "reports" ? (
-        reports.length === 0 ? (
+        filteredReports.length === 0 ? (
           <div className="rounded-xl border border-dashed p-12 text-center space-y-2 bg-card/40">
             <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
               <ShieldCheck className="h-6 w-6" />
@@ -478,7 +556,7 @@ export const ResourceModerationPage: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {reports.map((report) => {
+            {filteredReports.map((report) => {
               const target = report.targetContent;
               const hasTarget = target && target.exists !== false;
               const targetUrl =
