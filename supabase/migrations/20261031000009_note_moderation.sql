@@ -1,10 +1,10 @@
 -- =============================================================================
 -- Migration: 20261031000009_note_moderation.sql
--- Description: Note curation & moderation workflow: pending status, community storage migration on approval,
---              quota release, and staff moderation RPCs.
+-- Description: Note curation & moderation workflow: pending status, staff moderation RPCs,
+--              and audit logging.
 -- =============================================================================
 
--- 1. Add status column to public.notes
+-- 1. Add status column to public.notes (if not already added)
 ALTER TABLE public.notes
   ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending'
   CHECK (status IN ('pending', 'approved', 'rejected'));
@@ -18,23 +18,7 @@ WHERE is_shared = true;
 CREATE INDEX IF NOT EXISTS idx_notes_status ON public.notes(status);
 CREATE INDEX IF NOT EXISTS idx_notes_subject_status ON public.notes(subject_id, status);
 
--- 3. Storage policy: Ensure community-shared files are readable by authenticated users
-CREATE POLICY "Public read on community shared notes in subject-notes"
-  ON storage.objects FOR SELECT
-  TO authenticated
-  USING (
-    bucket_id = 'subject-notes' AND (
-      (storage.foldername(name))[1] = 'community'
-      OR (auth.uid()::text = (storage.foldername(name))[1])
-      OR EXISTS (
-        SELECT 1 FROM public.notes n
-        WHERE n.storage_path = storage.objects.name
-          AND (select public.is_staff_for(n.subject_id))
-      )
-    )
-  );
-
--- 4. RPC: Approve submitted note, move file to community storage, release user quota, publish to public archive
+-- 3. RPC: Approve submitted note and publish to public archive
 CREATE OR REPLACE FUNCTION public.approve_note(
   p_note_id UUID,
   p_category TEXT DEFAULT NULL
@@ -46,9 +30,6 @@ SET search_path = public, storage, pg_temp
 AS $$
 DECLARE
   v_note public.notes;
-  v_old_path TEXT;
-  v_new_path TEXT;
-  v_file_name TEXT;
 BEGIN
   SELECT * INTO v_note
   FROM public.notes
@@ -63,40 +44,14 @@ BEGIN
     RAISE EXCEPTION 'Access denied. Moderator or Admin privileges required for subject %.', v_note.subject_id;
   END IF;
 
-  v_old_path := v_note.storage_path;
-  v_file_name := (storage.filename(v_old_path));
-  v_new_path := 'community/' || v_note.subject_id || '/' || v_file_name;
+  -- Set trusted session configuration flag to authorize status & is_shared mutation
+  PERFORM set_config('app.trusted_note_update', '1', true);
 
-  -- 1. Copy file from user staging path to community shared path
-  INSERT INTO storage.objects (
-    bucket_id,
-    name,
-    owner,
-    metadata,
-    created_at,
-    updated_at
-  )
-  SELECT
-    bucket_id,
-    v_new_path,
-    owner,
-    metadata,
-    now(),
-    now()
-  FROM storage.objects
-  WHERE bucket_id = 'subject-notes' AND name = v_old_path
-  ON CONFLICT (bucket_id, name) DO NOTHING;
-
-  -- 2. Delete file from user staging path so user's 50 MB personal quota is freed
-  DELETE FROM storage.objects
-  WHERE bucket_id = 'subject-notes' AND name = v_old_path;
-
-  -- 3. Update public.notes record with approved state and community path
+  -- Update public.notes record with approved state; storage_path remains unchanged
   UPDATE public.notes
   SET
     status = 'approved',
     is_shared = true,
-    storage_path = v_new_path,
     description = COALESCE(p_category, description, 'Other')
   WHERE id = p_note_id
   RETURNING * INTO v_note;
@@ -114,7 +69,7 @@ BEGIN
 END;
 $$;
 
--- 5. RPC: Reject submitted note, purge file from storage, release user quota
+-- 4. RPC: Reject submitted note (storage file is purged by client before RPC call)
 CREATE OR REPLACE FUNCTION public.reject_note(
   p_note_id UUID,
   p_reason TEXT DEFAULT NULL
@@ -126,7 +81,6 @@ SET search_path = public, storage, pg_temp
 AS $$
 DECLARE
   v_note public.notes;
-  v_old_path TEXT;
 BEGIN
   SELECT * INTO v_note
   FROM public.notes
@@ -141,16 +95,14 @@ BEGIN
     RAISE EXCEPTION 'Access denied. Moderator or Admin privileges required for subject %.', v_note.subject_id;
   END IF;
 
-  v_old_path := v_note.storage_path;
+  -- Set trusted session configuration flag to authorize status mutation
+  PERFORM set_config('app.trusted_note_update', '1', true);
 
-  IF v_old_path IS NOT NULL THEN
-    -- Delete from storage bucket
-    DELETE FROM storage.objects
-    WHERE bucket_id = 'subject-notes' AND name = v_old_path;
-  END IF;
-
-  -- Delete from public.notes table
-  DELETE FROM public.notes
+  -- Mark note as rejected and unshared (no storage SQL operations)
+  UPDATE public.notes
+  SET
+    status = 'rejected',
+    is_shared = false
   WHERE id = p_note_id;
 
   INSERT INTO public.moderation_log (subject_id, actor, target, action, details)
@@ -166,7 +118,7 @@ BEGIN
 END;
 $$;
 
--- 6. Permissions
+-- 5. Permissions
 REVOKE EXECUTE ON FUNCTION public.approve_note(UUID, TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.approve_note(UUID, TEXT) TO authenticated;
 

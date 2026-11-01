@@ -9,28 +9,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ShieldCheck,
   ArrowLeft,
-  Filter,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  Clock,
-  User,
   ExternalLink,
   Loader2,
-  HardDrive,
   Search,
-  MessageSquare,
-  Trash2,
-  Flag,
-  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { FormattedText } from "./components/FormattedText";
 import {
   Select,
   SelectContent,
@@ -38,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { communitiesService } from "./services";
 import type { ResourceNote, ResourceCategory, ResourceType, SubjectForum, Report } from "./services/types";
 import { toast } from "sonner";
@@ -186,7 +171,7 @@ export const ResourceModerationPage: React.FC = () => {
 
       setPendingNotes((prev) => prev.filter((p) => p.id !== note.id));
       toast.success(
-        `"${note.title}" approved! Moved to community storage and published to ${chosenCategory}.`
+        `"${note.title}" approved and published to ${chosenCategory}.`
       );
     } catch (err: any) {
       toast.error(err.message || "An error occurred while approving.");
@@ -195,7 +180,7 @@ export const ResourceModerationPage: React.FC = () => {
     }
   };
 
-  // Handle Reject: deletes file from storage and purges record, freeing user's personal quota
+  // Handle Reject: deletes file from storage and marks record rejected, freeing user's personal quota
   const handleReject = async (note: ResourceNote) => {
     if (!window.confirm(`Are you sure you want to reject and discard "${note.title}"?`)) {
       return;
@@ -204,7 +189,7 @@ export const ResourceModerationPage: React.FC = () => {
     try {
       setIsProcessingId(note.id);
       if (communitiesService.rejectResource) {
-        const res = await communitiesService.rejectResource(note.id);
+        const res = await communitiesService.rejectResource(note.id, note.storagePath);
         if (res.error) {
           toast.error(res.error.message || "Failed to reject resource.");
           return;
@@ -319,11 +304,6 @@ export const ResourceModerationPage: React.FC = () => {
     return result;
   }, [reports, reportTargetFilter, selectedSubject, searchQuery, sortBy]);
 
-  const getSubjectName = (subjectId: string) => {
-    const found = forums.find((f) => f.id === subjectId);
-    return found ? found.name : subjectId.toUpperCase();
-  };
-
   const formatSize = (bytes?: number) => {
     if (!bytes) return "—";
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -341,84 +321,73 @@ export const ResourceModerationPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="max-w-4xl mx-auto px-4 py-6 space-y-5">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1.5 text-xs text-muted-foreground hover:text-foreground h-7 px-2"
-              onClick={() => navigate("/communities")}
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Communities</span>
-            </Button>
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2.5 mt-1">
-            <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-              <ShieldCheck className="h-5 w-5" />
-            </div>
-            <span>Community Moderation Portal</span>
-            <Badge variant="secondary" className="text-xs font-semibold px-2 py-0.5">
-              {user?.role === "admin" ? "Global Admin Scope" : `${user?.moderatedSubjectIds?.length || 0} Assigned Subject(s)`}
-            </Badge>
+      <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-3">
+        <div className="flex items-center gap-2.5">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0 -ml-1 cursor-pointer"
+            onClick={() => navigate("/communities")}
+            title="Back to Communities"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <span>Moderation</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {activeTab === "reports"
+                ? `${reports.filter((r) => r.status === "pending").length} pending`
+                : `${pendingNotes.length} pending`}
+            </span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
-            Review student-submitted lecture notes, PYQs, and flagged reports within your authorized subject communities.
-          </p>
         </div>
 
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
           onClick={loadPending}
           disabled={isLoading}
-          className="h-8 text-xs gap-1.5 cursor-pointer self-start sm:self-center"
+          className="h-8 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
         >
-          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh Queue"}
+          {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
         </Button>
       </div>
 
       {/* Moderation Section Tabs */}
-      <div className="flex items-center gap-2 border-b pb-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab("resources")}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-            activeTab === "resources"
-              ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-          }`}
-        >
-          Pending Resources ({pendingNotes.length})
-        </button>
+      <div className="flex items-center gap-1.5 border-b border-border/50 pb-2">
         <button
           type="button"
           onClick={() => setActiveTab("reports")}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
             activeTab === "reports"
-              ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
           }`}
         >
-          Reports Queue ({reports.filter((r) => r.status === "pending").length})
+          Reports ({reports.filter((r) => r.status === "pending").length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("resources")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+            activeTab === "resources"
+              ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+          }`}
+        >
+          Resources ({pendingNotes.length})
         </button>
       </div>
 
       {/* Filter and Control Bar */}
-      <div className="rounded-xl border bg-card/60 p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Left: Filters */}
-        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Filter className="h-3.5 w-3.5" />
-            <span className="font-semibold text-[11px] uppercase tracking-wider">Filter:</span>
-          </div>
-
+      <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs">
+        <div className="flex flex-wrap items-center gap-2 flex-1 min-w-[240px]">
           {/* Subject Filter */}
           <Select value={selectedSubject} onValueChange={setSelectedSubject}>
-            <SelectTrigger className="h-8 text-xs w-[160px]">
+            <SelectTrigger className="h-8 text-xs w-[140px]">
               <SelectValue placeholder="All Subjects" />
             </SelectTrigger>
             <SelectContent>
@@ -433,129 +402,83 @@ export const ResourceModerationPage: React.FC = () => {
             </SelectContent>
           </Select>
 
-          {/* Context-aware Type Filter */}
+          {/* Type Filter */}
           {activeTab === "resources" ? (
-            <div className="flex items-center bg-secondary/80 rounded-md p-0.5 border text-xs">
-              <button
-                type="button"
-                onClick={() => setTypeFilter("all")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  typeFilter === "all"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter("Note")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  typeFilter === "Note"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Notes
-              </button>
-              <button
-                type="button"
-                onClick={() => setTypeFilter("PYQ")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  typeFilter === "PYQ"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                PYQs
-              </button>
+            <div className="flex items-center bg-muted/60 rounded-lg p-0.5 border border-border/50 text-xs">
+              {(["all", "Note", "PYQ"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md cursor-pointer transition-colors ${
+                    typeFilter === t
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t === "all" ? "All" : t === "Note" ? "Notes" : "PYQs"}
+                </button>
+              ))}
             </div>
           ) : (
-            <div className="flex items-center bg-secondary/80 rounded-md p-0.5 border text-xs">
-              <button
-                type="button"
-                onClick={() => setReportTargetFilter("all")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  reportTargetFilter === "all"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => setReportTargetFilter("post")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  reportTargetFilter === "post"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Posts
-              </button>
-              <button
-                type="button"
-                onClick={() => setReportTargetFilter("comment")}
-                className={`px-2 py-1 text-[11px] font-medium rounded cursor-pointer ${
-                  reportTargetFilter === "comment"
-                    ? "bg-background text-foreground shadow-xs font-semibold"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Comments
-              </button>
+            <div className="flex items-center bg-muted/60 rounded-lg p-0.5 border border-border/50 text-xs">
+              {(["all", "post", "comment"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setReportTargetFilter(t)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-md cursor-pointer transition-colors ${
+                    reportTargetFilter === t
+                      ? "bg-background text-foreground shadow-2xs font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {t === "all" ? "All" : t === "post" ? "Posts" : "Comments"}
+                </button>
+              ))}
             </div>
           )}
 
           {/* Search bar */}
-          <div className="relative flex-1 min-w-[140px] max-w-[220px]">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+          <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
             <Input
-              placeholder="Search title or user..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 pl-8 text-xs"
+              className="h-8 pl-8 text-xs bg-muted/30"
             />
           </div>
         </div>
 
         {/* Right: Sorting */}
-        <div className="flex items-center gap-2">
-          <span className="text-muted-foreground text-[11px] font-medium">Sort:</span>
-          <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
-            <SelectTrigger className="h-8 text-xs w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="size_desc">Largest File</SelectItem>
-              <SelectItem value="size_asc">Smallest File</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <Select value={sortBy} onValueChange={(val: any) => setSortBy(val)}>
+          <SelectTrigger className="h-8 text-xs w-[120px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest</SelectItem>
+            <SelectItem value="oldest">Oldest</SelectItem>
+            <SelectItem value="size_desc">Largest</SelectItem>
+            <SelectItem value="size_asc">Smallest</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Main Content Area */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center p-12 text-muted-foreground gap-3">
           <Loader2 className="h-7 w-7 animate-spin text-primary" />
-          <span className="text-xs">Loading moderation queue...</span>
+          <span className="text-xs">Loading queue...</span>
         </div>
       ) : activeTab === "reports" ? (
         filteredReports.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-12 text-center space-y-2 bg-card/40">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <h3 className="text-sm font-semibold text-foreground">No Active Reports</h3>
-            <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-              All community reports within your moderation scope have been addressed.
-            </p>
+          <div className="rounded-2xl border border-dashed p-10 text-center space-y-1 bg-card/40">
+            <h3 className="text-sm font-semibold text-foreground">No reports</h3>
+            <p className="text-xs text-muted-foreground">All flagged items have been handled.</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredReports.map((report) => {
               const target = report.targetContent;
               const hasTarget = target && target.exists !== false;
@@ -565,172 +488,99 @@ export const ResourceModerationPage: React.FC = () => {
                   : null;
 
               return (
-                <Card key={report.id} className="overflow-hidden border bg-card shadow-xs">
-                  <CardContent className="p-4 sm:p-5 space-y-4">
-                    {/* Top Meta Row */}
-                    <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="outline" className="text-[10px] font-semibold uppercase">
-                          {report.subjectId}
-                        </Badge>
-                        <Badge
-                          variant={report.targetType === "comment" ? "secondary" : "default"}
-                          className="text-[10px] uppercase font-mono gap-1"
-                        >
-                          {report.targetType === "comment" ? (
-                            <MessageSquare className="h-3 w-3" />
-                          ) : (
-                            <FileText className="h-3 w-3" />
-                          )}
-                          <span>Flagged {report.targetType}</span>
-                        </Badge>
-                        <Badge
-                          variant={report.status === "pending" ? "destructive" : "secondary"}
-                          className="text-[10px] capitalize font-medium"
-                        >
-                          {report.status}
-                        </Badge>
-                      </div>
-
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        <Clock className="h-3.5 w-3.5" />
-                        <span>Reported {formatTime(report.createdAt)} by</span>
-                        <span className="font-semibold text-foreground">
-                          @{report.reporterHandle || report.reporterName || "user"}
+                <Card key={report.id} className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5 shadow-xs space-y-3">
+                  {/* Top Meta Row */}
+                  <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold bg-muted text-muted-foreground border border-border/50">
+                        {report.subjectId.toUpperCase()}
+                      </span>
+                      <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300 border border-red-200 dark:border-red-900/40">
+                        {report.reason}
+                      </span>
+                      {target?.authorHandle && (
+                        <span className="text-muted-foreground">
+                          • @{target.authorHandle}
                         </span>
-                      </div>
-                    </div>
-
-                    {/* Reported Content Box: The actual comment or post reported */}
-                    <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2.5">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-2 text-xs">
-                          <Avatar className="h-5 w-5 border">
-                            {target?.authorAvatarUrl && (
-                              <AvatarImage src={target.authorAvatarUrl} alt={target.authorHandle || "Author"} />
-                            )}
-                            <AvatarFallback className="text-[9px] font-semibold bg-secondary">
-                              {(target?.authorHandle || "U").slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="font-semibold text-foreground">
-                            @{target?.authorHandle || "unknown_author"}
-                          </span>
-                          {report.targetType === "comment" && target?.title && (
-                            <span className="text-muted-foreground truncate max-w-xs">
-                              on post: &ldquo;{target.title}&rdquo;
-                            </span>
-                          )}
-                        </div>
-
-                        {targetUrl && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => navigate(targetUrl)}
-                            className="h-6 px-2 text-[11px] gap-1 text-primary hover:text-primary hover:bg-primary/10 cursor-pointer"
-                          >
-                            <span>View in Community</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </Button>
-                        )}
-                      </div>
-
-                      {hasTarget ? (
-                        <div className="space-y-1.5 pt-1">
-                          {target.title && report.targetType === "post" && (
-                            <h4 className="text-sm font-bold text-foreground">
-                              {target.title}
-                            </h4>
-                          )}
-                          {target.body && (
-                            <div className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-background/80 p-2.5 rounded-lg border border-border/50">
-                              <FormattedText content={target.body} />
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-muted-foreground italic py-1 flex items-center gap-1.5">
-                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                          <span>This content has already been removed or is no longer available.</span>
-                        </div>
                       )}
                     </div>
 
-                    {/* Report Reason Box */}
-                    <div className="flex items-start gap-2.5 bg-destructive/5 border border-destructive/20 text-xs p-3 rounded-xl">
-                      <Flag className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                      <div className="space-y-0.5 min-w-0 flex-1">
-                        <span className="font-semibold text-destructive">
-                          Reason for Report:
-                        </span>
-                        <p className="text-foreground/90 leading-snug">
-                          &ldquo;{report.reason}&rdquo;
+                    <div className="text-muted-foreground text-xs">
+                      Reported by @{report.reporterHandle || "user"} • {formatTime(report.createdAt)}
+                    </div>
+                  </div>
+
+                  {/* Target Content */}
+                  {hasTarget ? (
+                    <div className="space-y-1 pt-0.5">
+                      {target.title && report.targetType === "post" && (
+                        <h4 className="text-sm font-semibold text-foreground">
+                          {target.title}
+                        </h4>
+                      )}
+                      {target.body && (
+                        <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed line-clamp-3">
+                          {target.body}
                         </p>
-                      </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">
+                      Content already removed
+                    </p>
+                  )}
+
+                  {/* Footer: View Link & Concise Actions */}
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50">
+                    <div>
+                      {targetUrl && (
+                        <button
+                          type="button"
+                          onClick={() => navigate(targetUrl)}
+                          className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1 font-medium cursor-pointer"
+                        >
+                          <span>View {report.targetType}</span>
+                          <ExternalLink className="size-3" />
+                        </button>
+                      )}
                     </div>
 
-                    {/* Action Buttons for Moderators */}
                     {report.status === "pending" && (
-                      <div className="flex items-center justify-between gap-3 pt-1 border-t flex-wrap">
-                        <div className="flex items-center gap-2">
-                          {hasTarget && (
-                            <Button
-                              type="button"
-                              variant="destructive"
-                              size="sm"
-                              disabled={isProcessingId === report.id}
-                              onClick={() => handleDeleteReportedContent(report)}
-                              className="h-8 text-xs gap-1.5 cursor-pointer shadow-xs"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              <span>Delete {report.targetType === "comment" ? "Comment" : "Post"}</span>
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={isProcessingId === report.id}
+                          onClick={() => handleResolveReport(report.id, "dismissed")}
+                          className="h-7 text-xs px-3 cursor-pointer"
+                        >
+                          Dismiss
+                        </Button>
+                        {hasTarget && (
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="destructive"
                             size="sm"
                             disabled={isProcessingId === report.id}
-                            onClick={() => handleResolveReport(report.id, "dismissed")}
-                            className="h-8 text-xs gap-1.5 cursor-pointer"
+                            onClick={() => handleDeleteReportedContent(report)}
+                            className="h-7 text-xs px-3 cursor-pointer shadow-xs"
                           >
-                            <XCircle className="h-3.5 w-3.5" />
-                            <span>Dismiss Report</span>
+                            Delete
                           </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={isProcessingId === report.id}
-                            onClick={() => handleResolveReport(report.id, "resolved")}
-                            className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            <span>Mark Resolved</span>
-                          </Button>
-                        </div>
+                        )}
                       </div>
                     )}
-                  </CardContent>
+                  </div>
                 </Card>
               );
             })}
           </div>
         )
       ) : filteredNotes.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-12 text-center space-y-2 bg-card/40">
-          <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
-            <ShieldCheck className="h-6 w-6" />
-          </div>
-          <h3 className="text-sm font-semibold text-foreground">Moderation Queue is Clear</h3>
-          <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-            {pendingNotes.length === 0
-              ? "There are currently no student resources waiting for review. Community archives are up to date."
-              : "No resources matched your current filter criteria."}
-          </p>
+        <div className="rounded-2xl border border-dashed p-10 text-center space-y-1 bg-card/40">
+          <h3 className="text-sm font-semibold text-foreground">No pending resources</h3>
+          <p className="text-xs text-muted-foreground">All student notes and papers have been reviewed.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -742,132 +592,87 @@ export const ResourceModerationPage: React.FC = () => {
             return (
               <Card
                 key={note.id}
-                className="overflow-hidden border transition-all hover:border-primary/40 bg-card/80"
+                className="rounded-2xl border border-border/70 bg-card p-4 sm:p-5 shadow-xs space-y-3"
               >
-                <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  {/* Left: Document Info */}
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge
-                        variant={note.type === "Note" ? "default" : "secondary"}
-                        className="text-[10px] font-semibold px-2 py-0.5"
-                      >
-                        {note.type}
-                      </Badge>
-
-                      <Badge variant="outline" className="text-[11px] text-foreground font-medium">
-                        {getSubjectName(note.subjectId)}
-                      </Badge>
-
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/5"
-                      >
-                        Pending Review
-                      </Badge>
-                    </div>
-
-                    <h3 className="text-sm font-semibold text-foreground truncate">{note.title}</h3>
-
-                    {/* Metadata chips */}
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <User className="h-3 w-3" />
-                        <span>{note.uploaderName || note.uploaderHandle || "Contributor"}</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        <span>{formatTime(note.createdAt)}</span>
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <HardDrive className="h-3 w-3" />
-                        <span>{formatSize(note.fileSizeBytes)}</span>
-                      </span>
-                      {note.pageCount && note.pageCount > 0 && (
-                        <span className="flex items-center gap-1">
-                          <FileText className="h-3 w-3" />
-                          <span>
-                            {note.pageCount} {note.pageCount === 1 ? "page" : "pages"}
-                          </span>
-                        </span>
-                      )}
-                    </div>
+                <div className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="rounded px-2 py-0.5 font-mono text-[11px] font-semibold bg-muted text-muted-foreground border border-border/50">
+                      {note.subjectId.toUpperCase()}
+                    </span>
+                    <span className="rounded px-2 py-0.5 text-[11px] font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/40">
+                      {note.type}
+                    </span>
+                    <span className="text-muted-foreground">
+                      • @{note.uploaderHandle}
+                    </span>
                   </div>
 
-                  {/* Right: Category Override & Actions */}
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0 pt-2 md:pt-0 border-t md:border-t-0">
-                    {/* Category Selector */}
+                  <div className="text-muted-foreground text-xs">
+                    {formatTime(note.createdAt)} • {formatSize(note.fileSizeBytes)}
+                    {note.pageCount ? ` • ${note.pageCount}p` : ""}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground truncate">{note.title}</h4>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50 flex-wrap">
+                  <div className="flex items-center gap-2">
                     {note.type === "Note" && (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
-                          Category:
-                        </span>
-                        <Select
-                          value={currentCategory}
-                          onValueChange={(val: ResourceCategory) =>
-                            setCategoryOverrides((prev) => ({ ...prev, [note.id]: val }))
-                          }
-                          disabled={isProcessing}
-                        >
-                          <SelectTrigger className="h-8 text-xs w-[125px]">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="Day wise">Day wise</SelectItem>
-                            <SelectItem value="Unit wise">Unit wise</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      <Select
+                        value={currentCategory}
+                        onValueChange={(val: ResourceCategory) =>
+                          setCategoryOverrides((prev) => ({ ...prev, [note.id]: val }))
+                        }
+                        disabled={isProcessing}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-[110px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Day wise">Day wise</SelectItem>
+                          <SelectItem value="Unit wise">Unit wise</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                     )}
 
-                    {/* Preview Document Button */}
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="ghost"
                       size="sm"
                       onClick={() => handleOpenDocument(note)}
                       disabled={isOpening || isProcessing}
-                      className="h-8 text-xs gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                      className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground gap-1 cursor-pointer"
                     >
-                      {isOpening ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <ExternalLink className="h-3.5 w-3.5" />
-                      )}
+                      {isOpening ? <Loader2 className="size-3 animate-spin" /> : <ExternalLink className="size-3" />}
                       <span>Preview</span>
                     </Button>
+                  </div>
 
-                    {/* Reject Button */}
+                  <div className="flex items-center gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={() => handleReject(note)}
                       disabled={isProcessing}
-                      className="h-8 text-xs gap-1.5 text-destructive hover:bg-destructive/10 border-destructive/30 hover:border-destructive/60 cursor-pointer"
+                      className="h-7 text-xs px-3 text-destructive hover:bg-destructive/10 border-destructive/30 cursor-pointer"
                     >
-                      <XCircle className="h-3.5 w-3.5" />
-                      <span>Reject</span>
+                      Reject
                     </Button>
-
-                    {/* Approve Button */}
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => handleApprove(note)}
                       disabled={isProcessing}
-                      className="h-8 text-xs gap-1.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
+                      className="h-7 text-xs px-3 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
                     >
-                      {isProcessing ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      )}
-                      <span>Approve</span>
+                      {isProcessing ? <Loader2 className="size-3 animate-spin" /> : "Approve"}
                     </Button>
                   </div>
-                </CardContent>
+                </div>
               </Card>
             );
           })}

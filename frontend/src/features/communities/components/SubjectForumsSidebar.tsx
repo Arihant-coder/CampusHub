@@ -42,8 +42,8 @@ export function SubjectForumsSidebar({
         >
           {/* Header with collapse button */}
           <div className="flex items-center justify-between px-2 py-1 mb-2 shrink-0">
-            <span className="text-sm font-semibold tracking-tight text-foreground">
-              My Subject forums
+            <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+              My Subject Forums
             </span>
             <Button
               variant="ghost"
@@ -65,14 +65,14 @@ export function SubjectForumsSidebar({
                   key={forum.id}
                   type="button"
                   onClick={() => onSelectSubject(forum.id)}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-all flex items-center justify-between ${
+                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-all flex items-center justify-between ${
                     isActive
-                      ? "bg-secondary/90 border border-primary/20 text-foreground font-semibold shadow-xs"
+                      ? "bg-primary/10 border border-primary/25 text-primary font-semibold shadow-xs"
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate">
-                    <span className="text-muted-foreground">•</span>
+                    <span className={isActive ? "text-primary" : "text-muted-foreground"}>•</span>
                     <span className="truncate">{forum.name}</span>
                   </div>
                 </button>
@@ -83,8 +83,8 @@ export function SubjectForumsSidebar({
           {/* Pinned Forums Section */}
           {pinnedForums.length > 0 && (
             <div className="mt-4 pt-3 border-t shrink-0">
-              <div className="flex items-center gap-1.5 px-2 py-1 mb-1 text-xs font-semibold text-muted-foreground">
-                <Pin className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 px-2 py-1 mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <Pin className="h-3 w-3" />
                 <span>Pinned Forums</span>
               </div>
               <div className="space-y-1">
@@ -95,14 +95,14 @@ export function SubjectForumsSidebar({
                       key={forum.id}
                       type="button"
                       onClick={() => onSelectSubject(forum.id)}
-                      className={`w-full text-left px-2.5 py-1.5 rounded-md text-xs transition-all flex items-center justify-between ${
+                      className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-all flex items-center justify-between ${
                         isActive
-                          ? "bg-secondary/90 border border-primary/20 text-foreground font-semibold shadow-xs"
+                          ? "bg-primary/10 border border-primary/25 text-primary font-semibold shadow-xs"
                           : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                       }`}
                     >
                       <div className="flex items-center gap-2 truncate">
-                        <span className="text-muted-foreground">•</span>
+                        <span className={isActive ? "text-primary" : "text-muted-foreground"}>•</span>
                         <span className="truncate">{forum.name}</span>
                       </div>
                     </button>

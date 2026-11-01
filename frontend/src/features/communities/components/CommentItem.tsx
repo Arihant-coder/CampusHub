@@ -237,7 +237,7 @@ export function CommentItem({
             {comment.authorName || comment.authorHandle || "Anonymous"}
           </span>
           {isAuthorModerator && (
-            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1 py-0.2">
+            <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.2">
               MOD
             </span>
           )}
@@ -270,7 +270,7 @@ export function CommentItem({
           {comment.authorName || comment.authorHandle || "Anonymous"}
         </span>
         {isAuthorModerator && (
-          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1 py-0.2">
+          <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.2">
             MOD
           </span>
         )}

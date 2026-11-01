@@ -14,8 +14,6 @@ backend/
 │   └── security.py             # JWT bearer auth & Supabase token validation
 ├── features/                   # 1:1 Matching Feature Modules
 │   ├── subjects_ai/            # router.py, schemas.py, service.py
-│   ├── project_analysis/       # router.py, schemas.py, service.py
-│   ├── resume_reviewer/        # router.py, schemas.py, service.py
 │   └── daily_quiz/             # router.py, schemas.py, service.py
 ├── shared/                     # Health check endpoint
 │   └── health.py
@@ -30,8 +28,6 @@ backend/
 | Feature Module | Serves Frontend | Data & API Flow |
 | :--- | :--- | :--- |
 | **`features/subjects_ai/`** | `features/subject-ai-panel/` | **FastAPI** |
-| **`features/project_analysis/`** | `features/project-analysis/` | **FastAPI** |
-| **`features/resume_reviewer/`** | `features/resume-reviewer/` | **FastAPI** |
 | **`features/daily_quiz/`** | `features/daily-quiz/` | **FastAPI** & **Supabase** |
 
 ---

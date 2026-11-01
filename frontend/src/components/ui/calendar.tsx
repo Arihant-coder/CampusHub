@@ -27,7 +27,7 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        "bg-background group/calendar w-full p-3 [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        "bg-transparent group/calendar w-full p-0",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className
@@ -41,11 +41,11 @@ function Calendar({
       classNames={{
         root: cn("relative w-full", defaultClassNames.root, classNames?.root),
         months: cn(
-          "relative flex flex-col gap-4 w-full",
+          "relative flex flex-col gap-3 w-full",
           defaultClassNames.months,
           classNames?.months
         ),
-        month: cn("flex w-full flex-col gap-4", defaultClassNames.month, classNames?.month),
+        month: cn("flex w-full flex-col gap-3", defaultClassNames.month, classNames?.month),
         nav: cn(
           "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1 z-10",
           defaultClassNames.nav,
@@ -53,23 +53,23 @@ function Calendar({
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-8 select-none p-0 aria-disabled:opacity-50 hover:bg-muted text-muted-foreground hover:text-foreground",
+          "size-7 select-none p-0 aria-disabled:opacity-50 hover:bg-muted text-muted-foreground hover:text-foreground",
           defaultClassNames.button_previous,
           classNames?.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-8 select-none p-0 aria-disabled:opacity-50 hover:bg-muted text-muted-foreground hover:text-foreground",
+          "size-7 select-none p-0 aria-disabled:opacity-50 hover:bg-muted text-muted-foreground hover:text-foreground",
           defaultClassNames.button_next,
           classNames?.button_next
         ),
         month_caption: cn(
-          "flex h-8 w-full items-center justify-center px-8",
+          "flex h-7 w-full items-center justify-center px-8",
           defaultClassNames.month_caption,
           classNames?.month_caption
         ),
         dropdowns: cn(
-          "flex h-8 w-full items-center justify-center gap-1.5 text-sm font-medium",
+          "flex h-7 w-full items-center justify-center gap-1.5 text-sm font-medium",
           defaultClassNames.dropdowns,
           classNames?.dropdowns
         ),
@@ -87,7 +87,7 @@ function Calendar({
           "select-none font-semibold text-sm tracking-tight text-foreground",
           captionLayout === "label"
             ? ""
-            : "[&>svg]:text-muted-foreground flex h-8 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5",
+            : "[&>svg]:text-muted-foreground flex h-7 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5",
           defaultClassNames.caption_label,
           classNames?.caption_label
         ),
@@ -102,7 +102,7 @@ function Calendar({
           classNames?.weekdays
         ),
         weekday: cn(
-          "text-muted-foreground font-medium text-xs text-center p-0 h-8 align-middle select-none",
+          "text-muted-foreground font-medium text-xs text-center p-0 h-7 align-middle select-none",
           defaultClassNames.weekday,
           classNames?.weekday
         ),
@@ -127,7 +127,7 @@ function Calendar({
           classNames?.week_number
         ),
         day: cn(
-          "relative h-9 sm:h-10 p-0.5 text-center align-middle select-none",
+          "relative h-9 p-0 text-center align-middle select-none",
           defaultClassNames.day,
           classNames?.day
         ),
@@ -206,6 +206,7 @@ function CalendarDayButton({
   className,
   day,
   modifiers,
+  children,
   ...props
 }: React.ComponentProps<typeof DayButton>) {
   const defaultClassNames = getDefaultClassNames()
@@ -225,17 +226,19 @@ function CalendarDayButton({
       data-day={day.date.toLocaleDateString()}
       {...restProps}
       className={cn(
-        "size-8 sm:size-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex items-center justify-center transition-colors",
+        "h-8 w-8 sm:h-9 sm:w-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex items-center justify-center transition-colors cursor-pointer",
         modifiers.selected
           ? "bg-primary text-primary-foreground font-semibold hover:bg-primary hover:text-primary-foreground shadow-xs"
           : modifiers.today
-            ? "border border-primary font-semibold text-primary hover:bg-accent hover:text-accent-foreground"
+            ? "bg-primary/10 font-semibold text-primary hover:bg-primary/20"
             : "hover:bg-muted text-foreground",
         modifiers.outside && "text-muted-foreground/30 pointer-events-none hover:bg-transparent",
         defaultClassNames.day_button,
         className
       )}
-    />
+    >
+      {children}
+    </Button>
   )
 }
 

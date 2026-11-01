@@ -6,8 +6,7 @@
 -- 1. Authorized Campus Email Domains
 INSERT INTO public.allowed_email_domains (domain)
 VALUES
-  ('college.edu'),
-  ('campushub.edu')
+  ('yourcampus.edu') -- REPLACE WITH REAL CAMPUS DOMAIN
 ON CONFLICT (domain) DO NOTHING;
 
 -- 2. Academic Subjects Catalogue

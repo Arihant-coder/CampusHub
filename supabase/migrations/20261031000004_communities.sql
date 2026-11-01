@@ -88,6 +88,22 @@ CREATE TRIGGER trg_guard_post_update
   BEFORE UPDATE ON public.posts
   FOR EACH ROW EXECUTE FUNCTION public.guard_post_update();
 
+-- Force initial post counters to 0 on insert
+CREATE OR REPLACE FUNCTION public.handle_post_insert()
+RETURNS trigger AS $$
+BEGIN
+  NEW.upvotes     := 0;
+  NEW.downvotes   := 0;
+  NEW.reply_count := 0;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_guard_post_insert ON public.posts;
+CREATE TRIGGER trg_guard_post_insert
+  BEFORE INSERT ON public.posts
+  FOR EACH ROW EXECUTE FUNCTION public.handle_post_insert();
+
 -- 2. POST_VOTES
 CREATE TABLE IF NOT EXISTS public.post_votes (
     post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -248,6 +264,9 @@ BEGIN
     NEW.depth := v_parent_depth + 1;
   END IF;
 
+  NEW.upvotes   := 0;
+  NEW.downvotes := 0;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -269,7 +288,7 @@ BEGIN
   END IF;
   RETURN NULL;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS trg_comment_count ON public.comments;
 CREATE TRIGGER trg_comment_count

@@ -38,7 +38,7 @@ GRANT EXECUTE ON FUNCTION public.get_my_storage_usage() TO authenticated, servic
 GRANT EXECUTE ON FUNCTION public.check_community_images_quota(UUID, BIGINT) TO authenticated, service_role;
 
 -- 4. Unauthenticated (anon) Table Permissions (strictly minimal)
-GRANT SELECT ON public.allowed_email_domains TO anon;
+REVOKE SELECT ON public.allowed_email_domains FROM anon;
 
 -- 5. Authenticated User Table Permissions (least privilege)
 -- Profiles

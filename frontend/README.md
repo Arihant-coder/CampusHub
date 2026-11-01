@@ -308,9 +308,7 @@ frontend/
         ├── communities/        # Forums, channels sidebar, rich composer, comments & archive
         ├── subject-viewer/     # Note explorer & PDF/document viewer canvas
         ├── subject-ai-panel/   # AI Study Companion panel (right sidebar)
-        ├── daily-quiz/         # Daily practice quiz with timer & streak tracking
-        ├── project-analysis/   # GitHub repository architecture & code audit tool
-        └── resume-reviewer/    # ATS PDF resume reviewer
+        └── daily-quiz/         # Daily practice quiz with timer & streak tracking
 ```
 
 ---
@@ -327,8 +325,6 @@ Every developer owns **one isolated feature directory**. Features must never imp
 | **[`features/subject-viewer/`](src/features/subject-viewer/)** | `/subjects/:subjectId` (Main Canvas) | Direct **Supabase** (`subjects`, `notes`, `subject-notes` bucket) | *None* | **Scaffolded** |
 | **[`features/subject-ai-panel/`](src/features/subject-ai-panel/)** | `/subjects/:subjectId` (Right Drawer) | **FastAPI** (`/api/v1/subjects-ai/*`) | [`backend/features/subjects_ai/`](../backend/features/subjects_ai/README.md) | **Active** |
 | **[`features/daily-quiz/`](src/features/daily-quiz/)** | `/daily-quiz` | **FastAPI** `/api/v1/daily-quiz/*` + Supabase `user_streaks` | [`backend/features/daily_quiz/`](../backend/features/daily_quiz/README.md) | **Active** |
-| **[`features/project-analysis/`](src/features/project-analysis/)** | `/project-analysis` | Stateless via **FastAPI** `POST /api/v1/project-analysis/analyze` | [`backend/features/project_analysis/`](../backend/features/project_analysis/README.md) | **Scaffolded** |
-| **[`features/resume-reviewer/`](src/features/resume-reviewer/)** | `/resume-reviewer` | Stateless via **FastAPI** `POST /api/v1/resume-reviewer/review` | [`backend/features/resume_reviewer/`](../backend/features/resume_reviewer/README.md) | **Scaffolded** |
 
 ---
 
@@ -381,14 +377,6 @@ Every developer owns **one isolated feature directory**. Features must never imp
   - 30-second countdown timer per question.
   - Instant answer validation with concise explanations.
   - Streak tracking counter integrated with Supabase `user_streaks` table.
-
-### 6. Project Analysis (`features/project-analysis`)
-- **Route**: `/project-analysis`
-- **Overview**: GitHub repository inspector providing code complexity audits, architectural breakdown, and dependency summaries via the FastAPI backend.
-
-### 7. Resume Reviewer (`features/resume-reviewer`)
-- **Route**: `/resume-reviewer`
-- **Overview**: ATS PDF resume evaluator delivering scoring, keyword analysis, and actionable feedback via the FastAPI backend.
 
 ---
 

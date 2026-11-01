@@ -39,64 +39,73 @@ export function CommunityHeader({ forum }: CommunityHeaderProps) {
       : `${forum.memberCount}`;
 
   return (
-    <div className="relative overflow-hidden rounded-xl border bg-card text-card-foreground shadow-xs">
-      {/* Abstract Banner Artwork / Doodles */}
-      <div className="h-28 sm:h-32 w-full bg-linear-to-r from-muted/60 via-secondary/40 to-muted/80 relative overflow-hidden flex items-center justify-end px-8 pointer-events-none select-none">
-        {/* Subtle decorative SVGs mimicking sketch lines */}
+    <div className="relative overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs">
+      {/* Abstract Banner Artwork with Modern Collegiate Academic Wave */}
+      <div className="h-28 sm:h-32 w-full bg-linear-to-r from-indigo-50/70 via-purple-50/40 to-slate-50/60 dark:from-indigo-950/30 dark:via-purple-950/20 dark:to-slate-900/40 relative overflow-hidden flex items-center justify-end px-8 pointer-events-none select-none border-b border-border/50">
         <svg
-          className="absolute inset-0 w-full h-full opacity-15 stroke-foreground"
+          className="absolute inset-0 w-full h-full opacity-40 dark:opacity-25"
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
-          strokeWidth="1.5"
+          viewBox="0 0 1000 120"
+          preserveAspectRatio="none"
         >
-          <path d="M10 20 Q 80 80, 160 30 T 320 60 T 480 20 T 640 50 T 800 25 T 960 70" />
-          <path d="M50 70 Q 150 10, 250 60 T 450 40 T 650 70 T 850 35" />
-          <path d="M200 90 L 220 80 L 240 95 M 500 25 L 515 35 L 530 15 M 720 75 L 735 60 L 750 80" />
-          <path d="M300 20 C 340 70, 380 10, 420 50" />
-          <path d="M600 80 C 650 30, 700 90, 750 40" />
+          <path
+            d="M0 60 C 200 110, 400 10, 600 65 C 800 120, 900 30, 1000 50"
+            stroke="currentColor"
+            className="text-primary/40"
+            strokeWidth="1.5"
+            strokeDasharray="4 4"
+          />
+          <path
+            d="M0 80 C 250 30, 500 100, 750 40 C 900 20, 960 70, 1000 60"
+            stroke="currentColor"
+            className="text-primary/60"
+            strokeWidth="1.5"
+          />
+          <circle cx="200" cy="55" r="3" className="fill-primary/60" />
+          <circle cx="450" cy="40" r="2.5" className="fill-primary/60" />
+          <circle cx="720" cy="50" r="3" className="fill-primary/70" />
+          <circle cx="880" cy="30" r="2" className="fill-primary/50" />
         </svg>
       </div>
 
       {/* Community Info Overlay */}
       <div className="p-4 sm:p-5 flex items-start gap-4 -mt-10 sm:-mt-12 relative z-10">
-        {/* Community Network Avatar */}
+        {/* Community Network / Subject Avatar */}
         <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-2xl bg-card border-2 border-background shadow-md flex items-center justify-center shrink-0 text-primary">
           <Network className="h-9 w-9 sm:h-11 sm:w-11 stroke-[1.5]" />
         </div>
 
         {/* Title, Stats & Moderators */}
         <div className="pt-2 sm:pt-4 space-y-1.5 min-w-0 flex-1">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
-            {forum.name}
-          </h2>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
+              {forum.name}
+            </h2>
+            <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-muted text-muted-foreground border border-border/80">
+              {forum.code}
+            </span>
+          </div>
+
           <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground font-medium flex-wrap">
             <span className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5" />
               {formattedCount} users
             </span>
             <span>•</span>
-            <span className="font-mono text-xs">{forum.code}</span>
-          </div>
-
-          {/* Moderators list in each community header */}
-          <div className="flex items-center gap-2 pt-1 flex-wrap text-xs">
-            <div className="flex items-center gap-1 text-muted-foreground font-medium">
+            <div className="flex items-center gap-1">
               <ShieldCheck className="h-3.5 w-3.5 text-primary" />
               <span>Moderators:</span>
+              {moderators.length > 0 ? (
+                moderators.map((m) => (
+                  <span key={m.userId} className="text-foreground font-semibold">
+                    @{m.handle || m.fullName?.toLowerCase().replace(/\s+/g, "_") || "mod"}
+                  </span>
+                ))
+              ) : (
+                <span className="italic">None assigned</span>
+              )}
             </div>
-            {moderators.length > 0 ? (
-              moderators.map((m) => (
-                <Badge
-                  key={m.userId}
-                  variant="outline"
-                  className="text-[11px] font-normal py-0 px-1.5 border-border/70"
-                >
-                  {m.fullName || "Moderator"}
-                </Badge>
-              ))
-            ) : (
-              <span className="text-muted-foreground italic text-[11px]">None assigned</span>
-            )}
           </div>
         </div>
       </div>

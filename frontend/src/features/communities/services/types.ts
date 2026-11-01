@@ -131,7 +131,7 @@ export interface CommunitiesService {
   getResources(subjectId: string, type: ResourceType): Promise<Result<ResourceNote[]>>;
   getPendingResources?(subjectId?: string): Promise<Result<ResourceNote[]>>;
   approveResource?(resourceId: string, category?: ResourceCategory): Promise<Result<ResourceNote>>;
-  rejectResource?(resourceId: string, reason?: string): Promise<Result<boolean>>;
+  rejectResource?(resourceId: string, storagePath?: string, reason?: string): Promise<Result<boolean>>;
   uploadResource(data: {
     subjectId: string;
     title: string;
@@ -140,7 +140,7 @@ export interface CommunitiesService {
     pageCount?: number;
     file?: File;
   }): Promise<Result<ResourceNote>>;
-  deleteResource?(resourceId: string, storagePath: string): Promise<Result<boolean>>;
+  deleteResource?(resourceId: string, storagePath?: string): Promise<Result<boolean>>;
   deletePost?(postId: string, imagePaths?: string[]): Promise<Result<boolean>>;
   deleteComment?(commentId: string, imagePaths?: string[]): Promise<Result<boolean>>;
   getCommunityModerators?(subjectId: string): Promise<Result<CommunityModerator[]>>;

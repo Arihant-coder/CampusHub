@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.notes (
     description TEXT,
     storage_path TEXT NOT NULL UNIQUE,
     tag TEXT NOT NULL CHECK (tag IN ('Lecture', 'PYQ', 'Summary', 'My Notes')),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
     is_shared BOOLEAN NOT NULL DEFAULT false,
     file_size_bytes BIGINT NOT NULL DEFAULT 0,
     page_count INT DEFAULT 1,
@@ -26,7 +27,9 @@ CREATE POLICY "Users can read own notes or shared community notes"
   ON public.notes FOR SELECT
   TO authenticated
   USING (
-    user_id = auth.uid() OR is_shared = true
+    user_id = auth.uid() OR
+    (is_shared = true AND status = 'approved') OR
+    (select public.is_staff_for(subject_id))
   );
 
 CREATE POLICY "Users can insert their own notes with matching storage path"
@@ -34,7 +37,9 @@ CREATE POLICY "Users can insert their own notes with matching storage path"
   TO authenticated
   WITH CHECK (
     user_id = auth.uid() AND
-    (storage.foldername(storage_path))[1] = auth.uid()::text
+    (storage.foldername(storage_path))[1] = auth.uid()::text AND
+    status = 'pending' AND
+    is_shared = false
   );
 
 CREATE POLICY "Users can update their own notes"
@@ -53,7 +58,7 @@ CREATE POLICY "Users or staff can delete notes"
     user_id = auth.uid() OR (select public.is_staff_for(subject_id))
   );
 
--- Guard notes updates: freeze immutable identifiers, storage path, and file size
+-- Guard notes updates: freeze immutable identifiers, storage path, file size, status, and is_shared
 CREATE OR REPLACE FUNCTION public.guard_notes_update()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -65,6 +70,10 @@ BEGIN
   NEW.storage_path    := OLD.storage_path;
   NEW.file_size_bytes := OLD.file_size_bytes;
   NEW.created_at      := OLD.created_at;
+  IF COALESCE(current_setting('app.trusted_note_update', true), '') <> '1' THEN
+    NEW.status        := OLD.status;
+    NEW.is_shared     := OLD.is_shared;
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -98,9 +107,20 @@ AS $$
 DECLARE
   v_global_used bigint;
   v_user_used bigint;
+  v_user_count bigint;
   c_global_limit CONSTANT bigint := 524288000; -- 500 MB
   c_user_limit   CONSTANT bigint := 52428800;  -- 50 MB
+  c_user_file_limit CONSTANT bigint := 30;
 BEGIN
+  -- Check user file count ceiling (fallback safeguard)
+  SELECT COUNT(*) INTO v_user_count
+  FROM storage.objects
+  WHERE bucket_id = 'subject-notes' AND (storage.foldername(name))[1] = p_owner::text;
+
+  IF v_user_count >= c_user_file_limit THEN
+    RETURN false;
+  END IF;
+
   -- Sum global usage in subject-notes bucket
   SELECT COALESCE(SUM((metadata->>'size')::bigint), 0) INTO v_global_used
   FROM storage.objects
@@ -158,7 +178,7 @@ END;
 $$;
 
 -- Storage Policies for subject-notes
-CREATE POLICY "Private read on subject-notes for owner or shared community notes"
+CREATE POLICY "Private read on subject-notes for owner, staff, or approved shared notes"
   ON storage.objects FOR SELECT
   TO authenticated
   USING (
@@ -166,9 +186,12 @@ CREATE POLICY "Private read on subject-notes for owner or shared community notes
       (auth.uid()::text = (storage.foldername(name))[1])
       OR
       EXISTS (
-        SELECT 1 FROM public.notes
-        WHERE notes.storage_path = name
-          AND notes.is_shared = true
+        SELECT 1 FROM public.notes n
+        WHERE n.storage_path = storage.objects.name
+          AND (
+            (n.is_shared = true AND n.status = 'approved')
+            OR (select public.is_staff_for(n.subject_id))
+          )
       )
     )
   );
@@ -179,11 +202,8 @@ CREATE POLICY "Users can upload own notes to subject-notes with quota verificati
   WITH CHECK (
     bucket_id = 'subject-notes' AND
     (auth.uid()::text = (storage.foldername(name))[1]) AND
-    (
-      -- When metadata size is provided, enforce quota; otherwise allow if under user file count limit
-      (metadata->>'size') IS NULL OR
-      public.check_subject_notes_quota(auth.uid(), (metadata->>'size')::bigint)
-    )
+    (metadata->>'size') IS NOT NULL AND
+    public.check_subject_notes_quota(auth.uid(), (metadata->>'size')::bigint)
   );
 
 CREATE POLICY "Users or staff can delete notes in subject-notes"

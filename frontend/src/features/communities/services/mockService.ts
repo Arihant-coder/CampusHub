@@ -480,7 +480,7 @@ const INITIAL_RESOURCES: any[] = [
     uploaderHandle: "Hashpotato",
     pageCount: 24,
     fileSizeBytes: 2450000,
-    storagePath: "community/cs301/day1-abcd.pdf",
+    storagePath: "mock-student-uuid/day1-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
     status: "approved",
     isShared: true,
@@ -495,7 +495,7 @@ const INITIAL_RESOURCES: any[] = [
     uploaderHandle: "Hashpotato",
     pageCount: 21,
     fileSizeBytes: 1890000,
-    storagePath: "community/cs301/day2-abcd.pdf",
+    storagePath: "mock-student-uuid/day2-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
     status: "approved",
     isShared: true,
@@ -510,7 +510,7 @@ const INITIAL_RESOURCES: any[] = [
     uploaderHandle: "Hashpotato",
     pageCount: 18,
     fileSizeBytes: 1420000,
-    storagePath: "community/cs301/day3-abcd.pdf",
+    storagePath: "mock-student-uuid/day3-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
     status: "approved",
     isShared: true,
@@ -525,7 +525,7 @@ const INITIAL_RESOURCES: any[] = [
     uploaderHandle: "Hashpotato",
     pageCount: 2,
     fileSizeBytes: 950000,
-    storagePath: "community/cs301/2023-endsem.pdf",
+    storagePath: "mock-student-uuid/2023-endsem.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
     status: "approved",
     isShared: true,
@@ -969,13 +969,13 @@ export const mockCommunitiesService: CommunitiesService = {
       status: "approved",
       isShared: true,
       category: category || resources[idx].category || "Other",
-      storagePath: `community/${resources[idx].subjectId}/${resources[idx].title}`,
+      storagePath: resources[idx].storagePath,
     };
     resources[idx] = updated;
     return { data: updated, error: null };
   },
 
-  async rejectResource(resourceId: string): Promise<Result<boolean>> {
+  async rejectResource(resourceId: string, _storagePath?: string, _reason?: string): Promise<Result<boolean>> {
     await new Promise((resolve) => setTimeout(resolve, 200));
     const idx = resources.findIndex((r) => r.id === resourceId);
     if (idx === -1) {
@@ -1010,7 +1010,7 @@ export const mockCommunitiesService: CommunitiesService = {
     return { data: newResource, error: null };
   },
 
-  async deleteResource(resourceId: string): Promise<Result<boolean>> {
+  async deleteResource(resourceId: string, _storagePath?: string): Promise<Result<boolean>> {
     await new Promise((resolve) => setTimeout(resolve, 150));
     resources = resources.filter((r) => r.id !== resourceId);
     return { data: true, error: null };
@@ -1179,6 +1179,19 @@ export const mockCommunitiesService: CommunitiesService = {
     reason: string;
   }): Promise<Result<Report>> {
     await new Promise((resolve) => setTimeout(resolve, 150));
+    const alreadyReported = mockReports.some(
+      (r) =>
+        r.reporterId === "mock-student-uuid" &&
+        r.targetType === data.targetType &&
+        r.targetId === data.targetId
+    );
+    if (alreadyReported) {
+      return {
+        data: null,
+        error: { code: "VALIDATION", message: "You have already reported this item." },
+      };
+    }
+
     const newReport: Report = {
       id: `rep-${Date.now()}`,
       subjectId: data.subjectId,

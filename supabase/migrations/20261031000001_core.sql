@@ -309,7 +309,8 @@ CREATE TABLE IF NOT EXISTS public.reports (
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'resolved', 'dismissed')),
     resolved_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    CONSTRAINT uq_reports_reporter_target UNIQUE (reporter_id, target_type, target_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_reports_subject_status ON public.reports (subject_id, status);
@@ -335,6 +336,74 @@ CREATE POLICY "Staff can update reports for their subjects"
   TO authenticated
   USING ((select public.is_staff_for(subject_id)))
   WITH CHECK ((select public.is_staff_for(subject_id)));
+
+-- Verify report target exists in the given subject_id
+CREATE OR REPLACE FUNCTION public.handle_report_insert()
+RETURNS trigger AS $$
+DECLARE
+  v_exists boolean := false;
+BEGIN
+  BEGIN
+    IF NEW.target_type = 'post' THEN
+      SELECT EXISTS (
+        SELECT 1 FROM public.posts
+        WHERE id = NEW.target_id::uuid AND subject_id = NEW.subject_id
+      ) INTO v_exists;
+    ELSIF NEW.target_type = 'comment' THEN
+      SELECT EXISTS (
+        SELECT 1 FROM public.comments
+        WHERE id = NEW.target_id::uuid AND subject_id = NEW.subject_id
+      ) INTO v_exists;
+    ELSIF NEW.target_type = 'note' THEN
+      SELECT EXISTS (
+        SELECT 1 FROM public.notes
+        WHERE id = NEW.target_id::uuid AND subject_id = NEW.subject_id
+      ) INTO v_exists;
+    ELSIF NEW.target_type = 'user' THEN
+      SELECT EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE id = NEW.target_id::uuid
+      ) INTO v_exists;
+    ELSE
+      RAISE EXCEPTION 'Invalid report target type: %', NEW.target_type;
+    END IF;
+  EXCEPTION WHEN invalid_text_representation THEN
+    RAISE EXCEPTION 'Target ID % is not a valid UUID for target type %', NEW.target_id, NEW.target_type;
+  END;
+
+  IF NOT v_exists THEN
+    RAISE EXCEPTION 'Target % of type % does not exist in subject %', NEW.target_id, NEW.target_type, NEW.subject_id;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_check_report_target ON public.reports;
+CREATE TRIGGER trg_check_report_target
+  BEFORE INSERT ON public.reports
+  FOR EACH ROW EXECUTE FUNCTION public.handle_report_insert();
+
+-- Guard report updates: staff updates can only modify status, resolved_by, and updated_at
+CREATE OR REPLACE FUNCTION public.guard_report_update()
+RETURNS trigger AS $$
+BEGIN
+  NEW.id          := OLD.id;
+  NEW.subject_id  := OLD.subject_id;
+  NEW.reporter_id := OLD.reporter_id;
+  NEW.target_type := OLD.target_type;
+  NEW.target_id   := OLD.target_id;
+  NEW.reason      := OLD.reason;
+  NEW.created_at  := OLD.created_at;
+  NEW.updated_at  := timezone('utc'::text, now());
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_guard_report_update ON public.reports;
+CREATE TRIGGER trg_guard_report_update
+  BEFORE UPDATE ON public.reports
+  FOR EACH ROW EXECUTE FUNCTION public.guard_report_update();
 
 -- 12. ADMIN RPCS
 CREATE OR REPLACE FUNCTION public.assign_moderator(p_subject_id text, p_user_id uuid)

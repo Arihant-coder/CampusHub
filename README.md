@@ -13,7 +13,7 @@ The project is structured into three clean layers:
   - **Feature Modules:** Fully isolated feature folders with placeholder views.
 - **`backend/`**: FastAPI service running in Python 3.11+.
   - **`core/`**: Server runtime (settings, CORS, auth, rate limiting).
-  - **`features/`**: 1:1 matching feature modules (`subjects_ai`, `project_analysis`, `resume_reviewer`, `daily_quiz`).
+  - **`features/`**: 1:1 matching feature modules (`subjects_ai`, `daily_quiz`).
   - **`shared/`**: System health check endpoint.
 - **`supabase/`**: PostgreSQL database migrations split by feature plus shared core tables.
 
@@ -30,8 +30,6 @@ Every developer is assigned one isolated feature folder in Frontend (+ 1 matchin
 | **Communities** | [`src/features/communities/`](frontend/src/features/communities/README.md) | *None* | Direct **Supabase** |
 | **Subject Editor & Viewer** | [`src/features/subject-viewer/`](frontend/src/features/subject-viewer/README.md) | *None* | Direct **Supabase** |
 | **Subject AI Companion** | [`src/features/subject-ai-panel/`](frontend/src/features/subject-ai-panel/README.md) | [`backend/features/subjects_ai/`](backend/features/subjects_ai/README.md) | **FastAPI** (`/api/v1/subjects-ai/*`) |
-| **Project Analysis** | [`src/features/project-analysis/`](frontend/src/features/project-analysis/README.md) | [`backend/features/project_analysis/`](backend/features/project_analysis/README.md) | **FastAPI** |
-| **Resume Reviewer** | [`src/features/resume-reviewer/`](frontend/src/features/resume-reviewer/README.md) | [`backend/features/resume_reviewer/`](backend/features/resume_reviewer/README.md) | **FastAPI** |
 | **Daily Quiz** | [`src/features/daily-quiz/`](frontend/src/features/daily-quiz/README.md) | [`backend/features/daily_quiz/`](backend/features/daily_quiz/README.md) | **FastAPI** & **Supabase** |
 
 > **Note on Subjects Workspace:**
@@ -60,8 +58,6 @@ frontend/src/
     ├── communities/            # Forum, resource archive, local PDF optimizer, & moderation queue
     ├── subject-viewer/         # Notes tree & document viewer (components/, services/, routes.tsx, SubjectViewerPage.tsx)
     ├── subject-ai-panel/       # AI companion panel (components/, services/, routes.tsx, SubjectAiPanelPage.tsx)
-    ├── project-analysis/       # GitHub repo audit tool (components/, services/, routes.tsx, ProjectAnalysisPage.tsx)
-    ├── resume-reviewer/        # ATS PDF resume reviewer (components/, services/, routes.tsx, ResumeReviewerPage.tsx)
     └── daily-quiz/             # CS fundamentals practice quiz (components/, services/, routes.tsx, DailyQuizPage.tsx)
 ```
 
@@ -74,8 +70,6 @@ backend/
 │   └── security.py
 ├── features/                   # 1:1 Matching Feature Modules
 │   ├── subjects_ai/            # router.py, schemas.py, service.py
-│   ├── project_analysis/       # router.py, schemas.py, service.py
-│   ├── resume_reviewer/        # router.py, schemas.py, service.py
 │   └── daily_quiz/             # router.py, schemas.py, service.py
 ├── shared/                     # Health check endpoint
 │   └── health.py
@@ -91,8 +85,6 @@ supabase/
     ├── communities.sql         # Communities posts, votes, comments, attachments
     ├── subjects.sql            # Subjects notes & storage
     ├── daily_quiz.sql          # Daily quiz schema
-    ├── project_analysis.sql    # Project analysis schema
-    ├── resume_reviewer.sql     # Resume reviewer schema
     └── dashboard.sql           # Dashboard preferences schema
 ```
 

@@ -106,6 +106,14 @@ export function PostCard({ post, onVote, highlightQuery }: PostCardProps) {
           <span className="font-medium text-foreground hover:underline">
             {post.authorName || "Anonymous"}
           </span>
+          {(post.authorRole === "moderator" ||
+            post.authorRole === "admin" ||
+            post.authorHandle === "morgan_t" ||
+            post.authorHandle === "sarah_vance") && (
+            <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
+              Moderator
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Clock className="h-3 w-3" />

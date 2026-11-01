@@ -15,13 +15,9 @@
                 "group": [
                   "@/features/daily-quiz/**",
                   "@/features/dashboard/**",
-                  "@/features/project-analysis/**",
-                  "@/features/resume-reviewer/**",
                   "@/features/subjects/**",
                   "../daily-quiz/**",
                   "../dashboard/**",
-                  "../project-analysis/**",
-                  "../resume-reviewer/**",
                   "../subjects/**"
                 ],
                 "message": "Files in features/communities may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
@@ -42,13 +38,9 @@
                 "group": [
                   "@/features/communities/**",
                   "@/features/dashboard/**",
-                  "@/features/project-analysis/**",
-                  "@/features/resume-reviewer/**",
                   "@/features/subjects/**",
                   "../communities/**",
                   "../dashboard/**",
-                  "../project-analysis/**",
-                  "../resume-reviewer/**",
                   "../subjects/**"
                 ],
                 "message": "Files in features/daily-quiz may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
@@ -69,70 +61,12 @@
                 "group": [
                   "@/features/communities/**",
                   "@/features/daily-quiz/**",
-                  "@/features/project-analysis/**",
-                  "@/features/resume-reviewer/**",
                   "@/features/subjects/**",
                   "../communities/**",
                   "../daily-quiz/**",
-                  "../project-analysis/**",
-                  "../resume-reviewer/**",
                   "../subjects/**"
                 ],
                 "message": "Files in features/dashboard may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["src/features/project-analysis/**/*.{ts,tsx}"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": [
-                  "@/features/communities/**",
-                  "@/features/daily-quiz/**",
-                  "@/features/dashboard/**",
-                  "@/features/resume-reviewer/**",
-                  "@/features/subjects/**",
-                  "../communities/**",
-                  "../daily-quiz/**",
-                  "../dashboard/**",
-                  "../resume-reviewer/**",
-                  "../subjects/**"
-                ],
-                "message": "Files in features/project-analysis may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
-              }
-            ]
-          }
-        ]
-      }
-    },
-    {
-      "files": ["src/features/resume-reviewer/**/*.{ts,tsx}"],
-      "rules": {
-        "no-restricted-imports": [
-          "error",
-          {
-            "patterns": [
-              {
-                "group": [
-                  "@/features/communities/**",
-                  "@/features/daily-quiz/**",
-                  "@/features/dashboard/**",
-                  "@/features/project-analysis/**",
-                  "@/features/subjects/**",
-                  "../communities/**",
-                  "../daily-quiz/**",
-                  "../dashboard/**",
-                  "../project-analysis/**",
-                  "../subjects/**"
-                ],
-                "message": "Files in features/resume-reviewer may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
               }
             ]
           }
@@ -151,13 +85,9 @@
                   "@/features/communities/**",
                   "@/features/daily-quiz/**",
                   "@/features/dashboard/**",
-                  "@/features/project-analysis/**",
-                  "@/features/resume-reviewer/**",
                   "../communities/**",
                   "../daily-quiz/**",
-                  "../dashboard/**",
-                  "../project-analysis/**",
-                  "../resume-reviewer/**"
+                  "../dashboard/**"
                 ],
                 "message": "Files in features/subjects may not import from other features. Files in features/* may import only from components/ui, lib/, shared/ and their own folder."
               }

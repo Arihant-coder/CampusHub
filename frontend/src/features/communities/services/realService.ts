@@ -691,7 +691,8 @@ export const realCommunitiesService: CommunitiesService = {
         .from("notes")
         .select("*, profiles!notes_user_id_fkey(handle, full_name)")
         .eq("subject_id", subjectId)
-        .eq("is_shared", true);
+        .eq("is_shared", true)
+        .eq("status", "approved");
 
       if (type === "PYQ") {
         query = query.eq("tag", "PYQ");
@@ -823,9 +824,32 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
-  async deleteResource(resourceId: string, storagePath: string): Promise<Result<boolean>> {
+  async deleteResource(resourceId: string, storagePath?: string): Promise<Result<boolean>> {
     try {
-      // 1. Delete database record FIRST
+      let resolvedPath = storagePath;
+      if (!resolvedPath) {
+        const { data: note } = await supabase
+          .from("notes")
+          .select("storage_path")
+          .eq("id", resourceId)
+          .maybeSingle();
+        if (note?.storage_path) {
+          resolvedPath = note.storage_path;
+        }
+      }
+
+      // 1. Delete file from Supabase Storage API FIRST (while notes row still exists for RLS staff check)
+      if (resolvedPath) {
+        const { error: storageError } = await supabase.storage
+          .from("subject-notes")
+          .remove([resolvedPath]);
+
+        if (storageError) {
+          console.warn("Storage removal warning:", storageError.message);
+        }
+      }
+
+      // 2. Delete database record
       const { error: dbError } = await supabase
         .from("notes")
         .delete()
@@ -836,15 +860,6 @@ export const realCommunitiesService: CommunitiesService = {
           data: null,
           error: { code: "INTERNAL", message: dbError.message },
         };
-      }
-
-      // 2. Delete file from Supabase Storage API
-      const { error: storageError } = await supabase.storage
-        .from("subject-notes")
-        .remove([storagePath]);
-
-      if (storageError) {
-        console.warn("Storage removal warning:", storageError.message);
       }
 
       return { data: true, error: null };
@@ -930,8 +945,32 @@ export const realCommunitiesService: CommunitiesService = {
     }
   },
 
-  async rejectResource(resourceId: string, reason?: string): Promise<Result<boolean>> {
+  async rejectResource(resourceId: string, storagePath?: string, reason?: string): Promise<Result<boolean>> {
     try {
+      let resolvedPath = storagePath;
+      if (!resolvedPath) {
+        const { data: note } = await supabase
+          .from("notes")
+          .select("storage_path")
+          .eq("id", resourceId)
+          .maybeSingle();
+        if (note?.storage_path) {
+          resolvedPath = note.storage_path;
+        }
+      }
+
+      // 1. Delete file from Supabase Storage API FIRST
+      if (resolvedPath) {
+        const { error: storageError } = await supabase.storage
+          .from("subject-notes")
+          .remove([resolvedPath]);
+
+        if (storageError) {
+          console.warn("Storage removal warning:", storageError.message);
+        }
+      }
+
+      // 2. Reject note via RPC (which updates status to 'rejected', logs to audit trail, without touching storage)
       const { error } = await supabase.rpc("reject_note", {
         p_note_id: resourceId,
         p_reason: reason || null,

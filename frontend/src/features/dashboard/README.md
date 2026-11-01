@@ -1,6 +1,6 @@
 # Feature Guide: Student Dashboard (`features/dashboard`)
 
-The **Dashboard** feature provides the home overview for enrolled university students. It presents student profile information, academic announcements, shortcuts to active subjects, and quick tool launchers (Communities, Project Analysis, Resume Reviewer, Daily Quiz).
+The **Dashboard** feature provides the home overview for enrolled university students. It presents student profile information, academic announcements, shortcuts to active subjects, and quick tool launchers (Communities, Daily Quiz).
 
 - **Frontend Path:** `frontend/src/features/dashboard/`
 - **Backend Path:** *None* (Direct Supabase)
@@ -22,8 +22,8 @@ frontend/src/features/dashboard/
 ├── components/               # Sub-components isolated to the dashboard
 │   ├── StudentProfileCard.tsx# Displays avatar, handle, semester, and academic role
 │   ├── EnrolledSubjectsGrid.tsx # Cards linking to enrolled course workspaces (/subjects/:id)
-│   ├── QuickToolLaunchers.tsx# Grid of quick action buttons for tools (Resume, Quiz, Audit)
-│   └── RecentActivityList.tsx# Activity feed showing recent discussions and quiz streaks
+│   ├── QuickToolLaunchers.tsx# Grid of quick action buttons for tools (Quiz, Communities)
+│   └── RecentActivityList.tsx# Activity feed showing hot discussions and quiz streaks
 ├── services/                 # Data access layer
 │   ├── types.ts              # DashboardService interface & data contracts
 │   ├── mockService.ts        # Mock implementation for offline UI development

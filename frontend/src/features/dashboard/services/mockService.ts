@@ -104,8 +104,11 @@ export const mockDashboardService: DashboardService = {
 
   async getHotDiscussions(limit = 5): Promise<Result<Post[]>> {
     await new Promise((resolve) => setTimeout(resolve, 250));
+    const sorted = [...MOCK_HOT_POSTS].sort(
+      (a, b) => (b.hotScore ?? 0) - (a.hotScore ?? 0)
+    );
     return {
-      data: MOCK_HOT_POSTS.slice(0, limit),
+      data: sorted.slice(0, limit),
       error: null,
     };
   },

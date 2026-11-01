@@ -169,9 +169,14 @@ export default function CommunitiesPage() {
                 </TabsTrigger>
                 <TabsTrigger
                   value="resources"
-                  className="relative rounded-none border-b-2 border-transparent px-2 pb-2.5 pt-1.5 font-semibold text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent"
+                  className="relative rounded-none border-b-2 border-transparent px-2 pb-2.5 pt-1.5 font-semibold text-muted-foreground hover:text-foreground data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:shadow-none bg-transparent inline-flex items-center gap-1.5"
                 >
-                  Resources
+                  <span>Resources</span>
+                  {notes.length + pyqs.length > 0 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted font-normal text-muted-foreground">
+                      {notes.length + pyqs.length}
+                    </span>
+                  )}
                 </TabsTrigger>
               </TabsList>
             </div>

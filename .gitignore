@@ -61,6 +61,7 @@ supabase/.branches/
 # ==============================================================================
 logs/
 *.log
+*.zip
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

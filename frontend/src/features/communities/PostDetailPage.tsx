@@ -382,7 +382,7 @@ export default function PostDetailPage() {
                     {isAuthorModerator && (
                       <Badge
                         variant="outline"
-                        className="text-[10px] py-0 px-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-medium"
+                        className="text-[10px] py-0 px-1.5 border-amber-500/40 text-amber-700 dark:text-amber-300 bg-amber-500/10 font-medium"
                       >
                         Moderator
                       </Badge>

@@ -10,11 +10,11 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
-  GitBranch,
-  FileText,
   Brain,
   Sun,
   Moon,
+  Laptop,
+  Check,
   LogOut,
   Camera,
   ShieldCheck,
@@ -26,7 +26,6 @@ import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,16 +56,6 @@ function getInitials(name?: string | null): string {
 
 const studentTools = [
   {
-    to: "/project-analysis",
-    label: "Project Analysis",
-    icon: GitBranch,
-  },
-  {
-    to: "/resume-reviewer",
-    label: "Resume Reviewer",
-    icon: FileText,
-  },
-  {
     to: "/daily-quiz",
     label: "Daily Quiz",
     icon: Brain,
@@ -78,14 +67,6 @@ function getPageTitle(pathname: string): string {
 
   if (pathname.startsWith("/communities")) {
     return "Communities";
-  }
-
-  if (pathname.startsWith("/project-analysis")) {
-    return "Project Analysis";
-  }
-
-  if (pathname.startsWith("/resume-reviewer")) {
-    return "Resume Reviewer";
   }
 
   if (pathname.startsWith("/daily-quiz")) {
@@ -128,9 +109,7 @@ function RootLayoutContent() {
       : undefined);
   const { actions, title: customTitle, center } = useHeader();
 
-  const { setTheme, resolvedTheme } = useTheme();
-
-  const isDarkMode = resolvedTheme === "dark";
+  const { setTheme, theme, resolvedTheme } = useTheme();
 
   const {
     width: sidebarWidth,
@@ -156,10 +135,6 @@ function RootLayoutContent() {
     }
   };
 
-  const toggleTheme = () => {
-    setTheme(isDarkMode ? "light" : "dark");
-  };
-
   return (
     <div
       className={`flex bg-background text-foreground ${
@@ -171,7 +146,7 @@ function RootLayoutContent() {
         style={{
           width: isSidebarOpen ? `${sidebarWidth}px` : 0,
         }}
-        className={`fixed inset-y-0 left-0 z-30 flex flex-col bg-card md:static relative shrink-0 overflow-hidden ${
+        className={`fixed inset-y-0 left-0 z-30 flex flex-col bg-card max-w-[calc(100vw-3rem)] md:max-w-none md:relative md:inset-auto md:z-auto shrink-0 overflow-hidden ${
           isSidebarDragging ? "" : "transition-[width] duration-200 ease-in-out"
         } ${
           isSidebarOpen
@@ -180,24 +155,37 @@ function RootLayoutContent() {
         }`}
       >
         <div
-          style={{ width: `${sidebarWidth}px`, minWidth: `${sidebarWidth}px` }}
-          className={`flex h-full flex-col justify-between p-4 overflow-y-auto transition-transform duration-200 ease-in-out ${
+          style={{ width: `${sidebarWidth}px` }}
+          className={`flex h-full w-full max-w-full flex-col justify-between p-4 overflow-y-auto transition-transform duration-200 ease-in-out ${
             isSidebarOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
           <div className="space-y-6">
-            {/* CampusHub Logo */}
-            <Link
-              to="/"
-              onClick={closeSidebarOnMobile}
-              className="flex items-center gap-2.5 px-2 py-1.5 text-xl font-bold tracking-tight"
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-                <GraduationCap className="h-5 w-5" />
-              </div>
+            {/* CampusHub Logo & Mobile Sidebar Close Button */}
+            <div className="flex items-center justify-between">
+              <Link
+                to="/"
+                onClick={closeSidebarOnMobile}
+                className="flex items-center gap-2.5 px-2 py-1.5 text-xl font-bold tracking-tight text-foreground"
+              >
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+                  <GraduationCap className="h-5 w-5" />
+                </div>
 
-              <span>CampusHub</span>
-            </Link>
+                <span>CampusHub</span>
+              </Link>
+
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen(false)}
+                aria-label="Hide sidebar"
+                className="h-9 w-9 text-muted-foreground hover:text-foreground md:hidden shrink-0"
+              >
+                <PanelLeftClose className="h-5 w-5" />
+              </Button>
+            </div>
 
             {/* Main Navigation */}
             <nav className="space-y-1.5">
@@ -206,9 +194,9 @@ function RootLayoutContent() {
                 to="/"
                 onClick={closeSidebarOnMobile}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-secondary font-semibold text-foreground"
+                      ? "bg-primary/10 font-semibold text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`
                 }
@@ -222,9 +210,9 @@ function RootLayoutContent() {
                 to="/communities"
                 onClick={closeSidebarOnMobile}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-secondary font-semibold text-foreground"
+                      ? "bg-primary/10 font-semibold text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`
                 }
@@ -239,9 +227,9 @@ function RootLayoutContent() {
                   to="/admin/moderators"
                   onClick={closeSidebarOnMobile}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                    `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                       isActive
-                        ? "bg-secondary font-semibold text-foreground"
+                        ? "bg-primary/10 font-semibold text-primary"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`
                   }
@@ -258,7 +246,7 @@ function RootLayoutContent() {
                   onClick={() =>
                     setIsStudentToolsOpen((previous) => !previous)
                   }
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isStudentToolsActive
                       ? "font-semibold text-foreground"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -290,7 +278,7 @@ function RootLayoutContent() {
                           onClick={closeSidebarOnMobile}
                           className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                             isActive
-                              ? "bg-secondary font-medium text-foreground"
+                              ? "bg-primary/10 font-semibold text-primary"
                               : "text-muted-foreground hover:bg-muted hover:text-foreground"
                           }`}
                         >
@@ -308,7 +296,7 @@ function RootLayoutContent() {
                 <button
                   type="button"
                   onClick={() => setIsSubjectsOpen((previous) => !previous)}
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                     isSubjectsActive
                       ? "font-semibold text-foreground"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -340,7 +328,7 @@ function RootLayoutContent() {
                           onClick={closeSidebarOnMobile}
                           className={`flex items-center justify-between rounded-md px-2.5 py-1.5 text-sm transition-colors ${
                             isActive
-                              ? "bg-secondary font-medium text-foreground"
+                              ? "bg-primary/10 font-semibold text-primary"
                               : "text-muted-foreground hover:bg-muted hover:text-foreground"
                           }`}
                         >
@@ -383,68 +371,109 @@ function RootLayoutContent() {
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="relative flex h-14 items-center justify-between border-b pl-2 pr-4 lg:pr-6 bg-background">
-          <div className="flex items-center gap-2 shrink-0 z-10">
+        <header className="flex h-14 items-center justify-between gap-2 sm:gap-4 border-b px-2 sm:px-4 lg:px-6 bg-background min-w-0">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen((previous) => !previous)}
               aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="h-9 w-9 text-muted-foreground hover:text-foreground"
+              className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
             >
               {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
             </Button>
 
-            <h1 className="text-base font-semibold text-foreground md:text-lg truncate max-w-[120px] sm:max-w-[200px] md:max-w-none">
+            <h1 className="text-base font-semibold text-foreground md:text-lg truncate shrink-0">
               {pageTitle}
             </h1>
           </div>
 
-          {/* Centered Header Slot */}
-          {center && (
-            <div className="absolute inset-x-0 mx-auto flex items-center justify-center pointer-events-none px-4">
-              <div className="pointer-events-auto w-full max-w-sm sm:max-w-md md:max-w-xl lg:max-w-2xl flex justify-center">
+          {/* Centered In-Flow Header Slot with min-w-0 so it NEVER overlaps! */}
+          {center ? (
+            <div className="flex-1 flex items-center justify-center min-w-0 px-2 sm:px-4">
+              <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl min-w-0">
                 {center}
               </div>
             </div>
+          ) : (
+            <div className="flex-1" />
           )}
 
-          <div className="flex items-center gap-2 shrink-0 z-10">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Feature Custom Header Actions */}
             {actions}
 
-            {/* Theme Toggle */}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              aria-label={
-                isDarkMode ? "Switch to light mode" : "Switch to dark mode"
-              }
-              title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              {isDarkMode ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )}
-            </Button>
+            {/* Theme Selector (Light, Dark, System) */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Select theme"
+                  title={`Theme: ${theme || "system"}`}
+                  className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                >
+                  {resolvedTheme === "dark" ? (
+                    <Moon className="h-5 w-5" />
+                  ) : (
+                    <Sun className="h-5 w-5" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-32">
+                <DropdownMenuItem
+                  onClick={() => setTheme("light")}
+                  className="flex items-center gap-2 cursor-pointer text-xs"
+                >
+                  <Sun className="h-4 w-4" />
+                  <span>Light</span>
+                  {theme === "light" && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setTheme("dark")}
+                  className="flex items-center gap-2 cursor-pointer text-xs"
+                >
+                  <Moon className="h-4 w-4" />
+                  <span>Dark</span>
+                  {theme === "dark" && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => setTheme("system")}
+                  className="flex items-center gap-2 cursor-pointer text-xs"
+                >
+                  <Laptop className="h-4 w-4" />
+                  <span>System</span>
+                  {(theme === "system" || !theme) && <Check className="h-3.5 w-3.5 ml-auto text-primary" />}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  className="rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:ring-2 hover:ring-primary/10"
+                  className="flex items-center gap-2.5 rounded-full sm:rounded-xl sm:px-2.5 sm:py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all hover:bg-muted/70 text-left shrink-0"
                   aria-label="User profile menu"
                 >
-                  <Avatar className="h-8 w-8 border border-border">
+                  <Avatar className="h-8 w-8 border border-border shrink-0">
                     {user?.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.fullName || "User"} />}
-                    <AvatarFallback className="text-xs font-semibold">
+                    <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
                       {getInitials(user?.fullName)}
                     </AvatarFallback>
                   </Avatar>
+                  <div className="hidden md:flex flex-col min-w-0 pr-1">
+                    <span className="text-xs font-semibold text-foreground truncate leading-tight">
+                      {user?.fullName || "Student User"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground truncate font-mono leading-tight">
+                      {user?.role === "admin"
+                        ? "Admin Staff"
+                        : (user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0)
+                        ? "Moderator"
+                        : "Student ID • CS-2024"}
+                    </span>
+                  </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[330px] p-3 shadow-2xl border-border/80 rounded-2xl bg-card">

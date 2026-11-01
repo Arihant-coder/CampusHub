@@ -124,14 +124,14 @@ export function GlobalSearchBar() {
   const isSearching = query.trim().length > 0 && (query.trim() !== debouncedQuery.trim() || isLoading);
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-lg md:max-w-xl lg:max-w-2xl">
+    <div ref={containerRef} className="relative w-full min-w-0">
       {/* Search Input Bar */}
-      <div className="relative flex items-center">
+      <div className="relative flex items-center min-w-0">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           ref={inputRef}
           type="search"
-          placeholder="Search across all subjects, notes, and communities..."
+          placeholder="Search subjects, notes, and communities..."
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -144,7 +144,7 @@ export function GlobalSearchBar() {
               inputRef.current?.blur();
             }
           }}
-          className="h-9 w-full pl-9 pr-9 text-xs sm:text-sm bg-muted/40 hover:bg-muted/60 focus:bg-background border-muted-foreground/20 focus:border-primary shadow-2xs rounded-lg transition-all"
+          className="h-9 w-full pl-9 pr-9 text-xs sm:text-sm bg-muted/40 hover:bg-muted/60 focus:bg-background border-muted-foreground/20 focus:border-primary shadow-2xs rounded-lg transition-all truncate"
         />
 
         {/* Right Action Icons: Spinner / Clear Button */}

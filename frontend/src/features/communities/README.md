@@ -233,11 +233,10 @@ The academic resource library is designed around a **curated contribution model*
    - Role-guarded via `<RoleRoute allowedRoles={["admin", "moderator"]}>`.
    - Admins/moderators inspect submissions, preview the PDF, and override the target category (`Day wise`, `Unit wise`, `Other`).
    - **Approve (`approveResource` / `approve_note` RPC)**:
-     - File is moved to `community/{subjectId}/{fileName}` in `subject-notes`.
-     - Deletes the original `{userId}/...` object, freeing the student's personal 50 MB quota.
      - Note is marked `is_shared = true`, `status = 'approved'`, making it publicly visible to all students.
+     - Storage path stays unchanged (no fragile SQL file copy or move).
    - **Reject (`rejectResource` / `reject_note` RPC)**:
-     - File is purged from storage and the note record deleted, releasing the student's quota.
+     - File is purged from storage via the client storage API and the note is marked rejected via RPC, releasing the student's quota.
 
 ---
 

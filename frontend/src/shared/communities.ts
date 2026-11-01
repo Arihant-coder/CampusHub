@@ -11,6 +11,7 @@ export interface Post {
   authorHandle: string;
   authorName?: string;
   authorAvatarUrl?: string | null;
+  authorRole?: string;
   title: string;
   body?: string;
   imageUrl?: string | null;
