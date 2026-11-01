@@ -42,6 +42,7 @@ import { usePersistentToggle } from "@/lib/use-persistent-toggle";
 import { ResizeHandle } from "@/components/ui/resize-handle";
 import { useAuth } from "@/lib/auth-context";
 import { AvatarUploadDialog } from "@/features/auth/components/AvatarUploadDialog";
+import { PrivacyOnboardingModal } from "@/features/auth/components/PrivacyOnboardingModal";
 
 function getInitials(name?: string | null): string {
   if (name) {
@@ -590,6 +591,18 @@ function RootLayoutContent() {
 
                   <DropdownMenuItem
                     className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
+                    onClick={() => {
+                      if (user?.handle) navigate(`/u/${user.handle}`);
+                    }}
+                  >
+                    <User className="size-4 text-foreground/80 shrink-0" />
+                    <span className="text-sm font-medium text-foreground">
+                      View Public Profile
+                    </span>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem
+                    className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded-lg hover:bg-muted/60 focus:bg-muted/60 transition-colors"
                     onClick={() => setIsAvatarDialogOpen(true)}
                   >
                     <Camera className="size-4 text-foreground/80 shrink-0" />
@@ -642,6 +655,9 @@ function RootLayoutContent() {
           open={isAvatarDialogOpen}
           onOpenChange={setIsAvatarDialogOpen}
         />
+
+        {/* First-Time Privacy Onboarding Modal */}
+        <PrivacyOnboardingModal />
       </div>
     </div>
   );

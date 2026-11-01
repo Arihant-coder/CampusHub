@@ -31,6 +31,7 @@ interface PostFeedProps {
   searchQuery?: string;
   onSearchChange?: (val: string) => void;
   onClearSearch?: () => void;
+  onDeletePost?: (postId: string) => void;
 }
 
 export function PostFeed({
@@ -44,6 +45,7 @@ export function PostFeed({
   searchQuery,
   onSearchChange,
   onClearSearch,
+  onDeletePost,
 }: PostFeedProps) {
   const navigate = useNavigate();
 
@@ -192,6 +194,7 @@ export function PostFeed({
               post={post}
               onVote={onVote}
               highlightQuery={searchQuery}
+              onDeletePost={onDeletePost}
             />
           ))}
         </div>

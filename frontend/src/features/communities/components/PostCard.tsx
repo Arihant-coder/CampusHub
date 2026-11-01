@@ -1,20 +1,43 @@
 /**
  * @file PostCard.tsx
- * @description Card component for previewing discussion threads with upvoting, carousel preview, and comment count.
+ * @description Card component for previewing discussion threads with upvoting, carousel preview, comment count, and card-level moderation actions.
  * @owner Communities Team
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Clock } from "lucide-react";
+import {
+  ArrowBigUp,
+  ArrowBigDown,
+  MessageSquare,
+  Clock,
+  MoreVertical,
+  Copy,
+  AlertCircle,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ImageCarousel } from "./ImageCarousel";
+import { useAuth } from "@/lib/auth-context";
+import { canModerate } from "@/shared/user";
+import { communitiesService } from "../services";
+import { toast } from "sonner";
 import type { Post } from "../services/types";
 
 interface PostCardProps {
   post: Post;
   onVote: (postId: string, vote: 1 | -1 | null) => void;
   highlightQuery?: string;
+  onDeletePost?: (postId: string) => void;
 }
 
 function HighlightedTitle({ title, query }: { title: string; query?: string }) {
@@ -51,11 +74,65 @@ function HighlightedTitle({ title, query }: { title: string; query?: string }) {
   );
 }
 
-export function PostCard({ post, onVote, highlightQuery }: PostCardProps) {
+export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCardProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const canDelete = Boolean(
+    user && (user.id === post.authorId || canModerate(user, post.subjectId))
+  );
 
   const handleOpenPost = () => {
     navigate(`/communities/${post.subjectId}/post/${post.id}`);
+  };
+
+  const handleAuthorClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (post.authorHandle) {
+      navigate(`/u/${post.authorHandle}`);
+    }
+  };
+
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/communities/${post.subjectId}/post/${post.id}`;
+    navigator.clipboard.writeText(url);
+    toast.success("Post link copied to clipboard.");
+  };
+
+  const handleReport = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (communitiesService.createReport) {
+        await communitiesService.createReport({
+          subjectId: post.subjectId,
+          targetType: "post",
+          targetId: post.id,
+          reason: "Reported as inappropriate or violating community guidelines.",
+        });
+      }
+      toast.success("Post reported to community moderators.");
+    } catch {
+      toast.error("Failed to submit report.");
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete "${post.title}"?`)) return;
+
+    try {
+      setIsDeleting(true);
+      if (communitiesService.deletePost) {
+        await communitiesService.deletePost(post.id, post.images);
+      }
+      toast.success("Post deleted.");
+      onDeletePost?.(post.id);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete post.");
+      setIsDeleting(false);
+    }
   };
 
   const handleUpvote = (e: React.MouseEvent) => {
@@ -96,28 +173,74 @@ export function PostCard({ post, onVote, highlightQuery }: PostCardProps) {
     >
       {/* Author and metadata */}
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-2">
-          <Avatar className="h-6 w-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Avatar className="h-6 w-6 cursor-pointer" onClick={handleAuthorClick}>
             {post.authorAvatarUrl && <AvatarImage src={post.authorAvatarUrl} alt={post.authorName || "User"} />}
             <AvatarFallback className="text-[10px] bg-secondary font-semibold">
-              {(post.authorName || "U").slice(0, 2).toUpperCase()}
+              {(post.authorName || post.authorHandle || "U").slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <span className="font-medium text-foreground hover:underline">
+          <span onClick={handleAuthorClick} className="font-medium text-foreground hover:underline cursor-pointer">
             {post.authorName || "Anonymous"}
           </span>
-          {(post.authorRole === "moderator" ||
-            post.authorRole === "admin" ||
-            post.authorHandle === "morgan_t" ||
-            post.authorHandle === "sarah_vance") && (
+          {post.authorHandle && (
+            <span onClick={handleAuthorClick} className="text-xs text-muted-foreground hover:underline cursor-pointer">
+              @{post.authorHandle}
+            </span>
+          )}
+          {(post.authorRole === "moderator" || post.authorRole === "admin") && (
             <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
               Moderator
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Clock className="h-3 w-3" />
-          <span>{formatTime(post.createdAt)}</span>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1">
+            <Clock className="h-3 w-3" />
+            <span>{formatTime(post.createdAt)}</span>
+          </div>
+
+          {/* 3-Dot Dropdown Menu for Post Card */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"
+                title="Post options"
+                disabled={isDeleting}
+              >
+                {isDeleting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <MoreVertical className="h-3.5 w-3.5" />
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={handleCopyLink} className="cursor-pointer">
+                <Copy className="mr-2 h-3.5 w-3.5" />
+                <span>Copy Link</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleReport} className="cursor-pointer">
+                <AlertCircle className="mr-2 h-3.5 w-3.5" />
+                <span>Report Post</span>
+              </DropdownMenuItem>
+              {canDelete && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleDelete}
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="mr-2 h-3.5 w-3.5" />
+                    <span>Delete Post</span>
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

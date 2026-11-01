@@ -15,6 +15,8 @@ export interface UserProfile {
   createdAt: string;
   moderatedSubjectIds?: string[];
   email?: string;
+  isPrivate?: boolean;
+  privacyOnboardingCompleted?: boolean;
 }
 
 /**

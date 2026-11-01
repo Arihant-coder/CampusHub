@@ -377,8 +377,23 @@ export default function PostDetailPage() {
                   >
                     {forum ? `${forum.code} • ${forum.name}` : "Community"}
                   </button>
-                  <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate">
-                    <span className="font-medium text-foreground/80">{post.authorName || post.authorHandle || "Anonymous"}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate flex-wrap">
+                    <span
+                      onClick={() => {
+                        if (post.authorHandle) navigate(`/u/${post.authorHandle}`);
+                      }}
+                      className="font-medium text-foreground/80 hover:underline cursor-pointer"
+                    >
+                      {post.authorName || "Anonymous"}
+                    </span>
+                    {post.authorHandle && (
+                      <span
+                        onClick={() => navigate(`/u/${post.authorHandle}`)}
+                        className="text-muted-foreground hover:underline cursor-pointer"
+                      >
+                        @{post.authorHandle}
+                      </span>
+                    )}
                     {isAuthorModerator && (
                       <Badge
                         variant="outline"

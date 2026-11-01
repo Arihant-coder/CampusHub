@@ -5,6 +5,7 @@
  */
 
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowBigUp,
   ArrowBigDown,
@@ -98,6 +99,7 @@ export function CommentItem({
   onVoteComment,
   onDeleteComment,
 }: CommentItemProps) {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { openImageViewer } = useImageViewer();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -256,8 +258,14 @@ export function CommentItem({
   return (
     <div className={`relative ${depth === 0 ? "mt-5 first:mt-0" : "mt-3.5"}`}>
       {/* Header Row: Avatar + Name + Time */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground select-none relative z-10">
-        <Avatar className="h-6 w-6 shrink-0 relative z-10 bg-background">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground select-none relative z-10 flex-wrap">
+        <Avatar
+          className="h-6 w-6 shrink-0 relative z-10 bg-background cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (comment.authorHandle) navigate(`/u/${comment.authorHandle}`);
+          }}
+        >
           {comment.authorAvatarUrl && (
             <AvatarImage src={comment.authorAvatarUrl} alt={comment.authorName || "User"} />
           )}
@@ -266,9 +274,26 @@ export function CommentItem({
           </AvatarFallback>
         </Avatar>
 
-        <span className="font-semibold text-foreground hover:underline cursor-pointer">
-          {comment.authorName || comment.authorHandle || "Anonymous"}
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            if (comment.authorHandle) navigate(`/u/${comment.authorHandle}`);
+          }}
+          className="font-semibold text-foreground hover:underline cursor-pointer"
+        >
+          {comment.authorName || "Anonymous"}
         </span>
+        {comment.authorHandle && (
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              if (comment.authorHandle) navigate(`/u/${comment.authorHandle}`);
+            }}
+            className="text-[11px] text-muted-foreground hover:underline cursor-pointer"
+          >
+            @{comment.authorHandle}
+          </span>
+        )}
         {isAuthorModerator && (
           <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.2">
             MOD

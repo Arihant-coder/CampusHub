@@ -8,6 +8,7 @@ import { dashboardRoute } from "@/features/dashboard/routes";
 import { communitiesRoute } from "@/features/communities/routes";
 import { dailyQuizRoute } from "@/features/daily-quiz/routes";
 import { adminRoute } from "@/features/admin/routes";
+import { profileRoute } from "@/features/profile/routes";
 
 export const router = createBrowserRouter([
   ...authRoutes,
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       dashboardRoute,
       communitiesRoute,
       adminRoute,
+      profileRoute,
       {
         path: "subjects",
         element: <SubjectWorkspaceLayout />,

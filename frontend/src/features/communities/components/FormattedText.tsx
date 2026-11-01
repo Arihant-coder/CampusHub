@@ -150,8 +150,28 @@ export function FormattedText({ content, className = "" }: FormattedTextProps) {
         continue;
       }
 
+      // Mention: @handle (3-20 chars alphanumeric + underscore)
+      const mentionMatch = remainder.match(/^@([a-zA-Z0-9_]{3,20})\b/);
+      if (mentionMatch) {
+        const handle = mentionMatch[1];
+        tokens.push(
+          <a
+            key={keyIdx++}
+            href={`/u/${handle}`}
+            className="text-primary hover:underline font-semibold bg-primary/10 px-1 py-0.5 rounded text-[0.9em]"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            @{handle}
+          </a>
+        );
+        remainder = remainder.slice(mentionMatch[0].length);
+        continue;
+      }
+
       // Plain character or text chunk up to next special char
-      const nextSpecial = remainder.search(/[*_~`[!]/);
+      const nextSpecial = remainder.search(/[*_~`[!@]/);
       if (nextSpecial === -1) {
         tokens.push(remainder);
         break;
