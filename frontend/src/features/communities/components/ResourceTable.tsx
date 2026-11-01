@@ -131,7 +131,7 @@ export function ResourceTable({
             {/* Metadata & Actions */}
             <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 shrink-0 text-xs text-muted-foreground pl-11 sm:pl-0">
               <span className="font-medium text-foreground/80">
-                {item.uploaderHandle}
+                {item.uploaderName || item.uploaderHandle || "Contributor"}
               </span>
               <span>•</span>
               <span>

@@ -98,13 +98,13 @@ export function PostCard({ post, onVote, highlightQuery }: PostCardProps) {
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <Avatar className="h-6 w-6">
-            {post.authorAvatarUrl && <AvatarImage src={post.authorAvatarUrl} alt={post.authorHandle} />}
+            {post.authorAvatarUrl && <AvatarImage src={post.authorAvatarUrl} alt={post.authorName || "User"} />}
             <AvatarFallback className="text-[10px] bg-secondary font-semibold">
-              {post.authorHandle.slice(0, 2).toUpperCase()}
+              {(post.authorName || "U").slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
           <span className="font-medium text-foreground hover:underline">
-            {post.authorHandle}
+            {post.authorName || "Anonymous"}
           </span>
         </div>
         <div className="flex items-center gap-1">

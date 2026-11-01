@@ -21,10 +21,16 @@ import {
   Loader2,
   HardDrive,
   Search,
+  MessageSquare,
+  Trash2,
+  Flag,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FormattedText } from "./components/FormattedText";
 import {
   Select,
   SelectContent,
@@ -126,6 +132,40 @@ export const ResourceModerationPage: React.FC = () => {
     }
   };
 
+  const handleDeleteReportedContent = async (report: Report) => {
+    const isComment = report.targetType === "comment";
+    const label = isComment ? "comment" : report.targetType === "post" ? "post" : "resource";
+    if (
+      !window.confirm(
+        `Are you sure you want to permanently delete this ${label} and mark the report resolved?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsProcessingId(report.id);
+      if (isComment && communitiesService.deleteComment) {
+        await communitiesService.deleteComment(report.targetId);
+      } else if (report.targetType === "post" && communitiesService.deletePost) {
+        await communitiesService.deletePost(report.targetId);
+      } else if (report.targetType === "note" && communitiesService.deleteResource) {
+        await communitiesService.deleteResource(report.targetId, "");
+      }
+
+      if (communitiesService.resolveReport) {
+        await communitiesService.resolveReport(report.id, "resolved");
+      }
+
+      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      toast.success(`Reported ${label} deleted and report resolved.`);
+    } catch (err: any) {
+      toast.error(err.message || `Failed to delete reported ${label}.`);
+    } finally {
+      setIsProcessingId(null);
+    }
+  };
+
   useEffect(() => {
     loadPending();
   }, [loadPending]);
@@ -216,7 +256,7 @@ export const ResourceModerationPage: React.FC = () => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter(
-        (n) => n.title.toLowerCase().includes(q) || n.uploaderHandle.toLowerCase().includes(q)
+        (n) => n.title.toLowerCase().includes(q) || (n.uploaderName || n.uploaderHandle || "").toLowerCase().includes(q)
       );
     }
 
@@ -437,64 +477,169 @@ export const ResourceModerationPage: React.FC = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {reports.map((report) => (
-              <Card key={report.id} className="overflow-hidden border bg-card/80">
-                <CardContent className="p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="outline" className="text-[10px] font-semibold uppercase">
-                        {report.subjectId}
-                      </Badge>
-                      <Badge variant="secondary" className="text-[10px] uppercase font-mono">
-                        {report.targetType}
-                      </Badge>
-                      <Badge
-                        variant={report.status === "pending" ? "default" : "secondary"}
-                        className="text-[10px] capitalize"
-                      >
-                        {report.status}
-                      </Badge>
-                      <span className="text-xs text-muted-foreground">
-                        Reported by <span className="font-medium text-foreground">@{report.reporterHandle}</span>
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground font-medium bg-muted/30 p-2.5 rounded-lg border">
-                      "{report.reason}"
-                    </p>
-                    <div className="text-xs text-muted-foreground">
-                      Target ID: <span className="font-mono">{report.targetId}</span> • {formatTime(report.createdAt)}
-                    </div>
-                  </div>
+          <div className="space-y-4">
+            {reports.map((report) => {
+              const target = report.targetContent;
+              const hasTarget = target && target.exists !== false;
+              const targetUrl =
+                target?.postId && (target.subjectId || report.subjectId)
+                  ? `/communities/${target.subjectId || report.subjectId}/post/${target.postId}`
+                  : null;
 
-                  {report.status === "pending" && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={isProcessingId === report.id}
-                        onClick={() => handleResolveReport(report.id, "dismissed")}
-                        className="h-8 text-xs gap-1.5"
-                      >
-                        <XCircle className="h-3.5 w-3.5" />
-                        <span>Dismiss</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={isProcessingId === report.id}
-                        onClick={() => handleResolveReport(report.id, "resolved")}
-                        className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white"
-                      >
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        <span>Mark Resolved</span>
-                      </Button>
+              return (
+                <Card key={report.id} className="overflow-hidden border bg-card shadow-xs">
+                  <CardContent className="p-4 sm:p-5 space-y-4">
+                    {/* Top Meta Row */}
+                    <div className="flex items-center justify-between gap-3 flex-wrap border-b pb-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge variant="outline" className="text-[10px] font-semibold uppercase">
+                          {report.subjectId}
+                        </Badge>
+                        <Badge
+                          variant={report.targetType === "comment" ? "secondary" : "default"}
+                          className="text-[10px] uppercase font-mono gap-1"
+                        >
+                          {report.targetType === "comment" ? (
+                            <MessageSquare className="h-3 w-3" />
+                          ) : (
+                            <FileText className="h-3 w-3" />
+                          )}
+                          <span>Flagged {report.targetType}</span>
+                        </Badge>
+                        <Badge
+                          variant={report.status === "pending" ? "destructive" : "secondary"}
+                          className="text-[10px] capitalize font-medium"
+                        >
+                          {report.status}
+                        </Badge>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Reported {formatTime(report.createdAt)} by</span>
+                        <span className="font-semibold text-foreground">
+                          @{report.reporterHandle || report.reporterName || "user"}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+
+                    {/* Reported Content Box: The actual comment or post reported */}
+                    <div className="rounded-xl border border-border/80 bg-muted/20 p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2 text-xs">
+                          <Avatar className="h-5 w-5 border">
+                            {target?.authorAvatarUrl && (
+                              <AvatarImage src={target.authorAvatarUrl} alt={target.authorHandle || "Author"} />
+                            )}
+                            <AvatarFallback className="text-[9px] font-semibold bg-secondary">
+                              {(target?.authorHandle || "U").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-semibold text-foreground">
+                            @{target?.authorHandle || "unknown_author"}
+                          </span>
+                          {report.targetType === "comment" && target?.title && (
+                            <span className="text-muted-foreground truncate max-w-xs">
+                              on post: &ldquo;{target.title}&rdquo;
+                            </span>
+                          )}
+                        </div>
+
+                        {targetUrl && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(targetUrl)}
+                            className="h-6 px-2 text-[11px] gap-1 text-primary hover:text-primary hover:bg-primary/10 cursor-pointer"
+                          >
+                            <span>View in Community</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+
+                      {hasTarget ? (
+                        <div className="space-y-1.5 pt-1">
+                          {target.title && report.targetType === "post" && (
+                            <h4 className="text-sm font-bold text-foreground">
+                              {target.title}
+                            </h4>
+                          )}
+                          {target.body && (
+                            <div className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-background/80 p-2.5 rounded-lg border border-border/50">
+                              <FormattedText content={target.body} />
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground italic py-1 flex items-center gap-1.5">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                          <span>This content has already been removed or is no longer available.</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Report Reason Box */}
+                    <div className="flex items-start gap-2.5 bg-destructive/5 border border-destructive/20 text-xs p-3 rounded-xl">
+                      <Flag className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                      <div className="space-y-0.5 min-w-0 flex-1">
+                        <span className="font-semibold text-destructive">
+                          Reason for Report:
+                        </span>
+                        <p className="text-foreground/90 leading-snug">
+                          &ldquo;{report.reason}&rdquo;
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons for Moderators */}
+                    {report.status === "pending" && (
+                      <div className="flex items-center justify-between gap-3 pt-1 border-t flex-wrap">
+                        <div className="flex items-center gap-2">
+                          {hasTarget && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              disabled={isProcessingId === report.id}
+                              onClick={() => handleDeleteReportedContent(report)}
+                              className="h-8 text-xs gap-1.5 cursor-pointer shadow-xs"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete {report.targetType === "comment" ? "Comment" : "Post"}</span>
+                            </Button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={isProcessingId === report.id}
+                            onClick={() => handleResolveReport(report.id, "dismissed")}
+                            className="h-8 text-xs gap-1.5 cursor-pointer"
+                          >
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Dismiss Report</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={isProcessingId === report.id}
+                            onClick={() => handleResolveReport(report.id, "resolved")}
+                            className="h-8 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Mark Resolved</span>
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )
       ) : filteredNotes.length === 0 ? (
@@ -550,7 +695,7 @@ export const ResourceModerationPage: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <User className="h-3 w-3" />
-                        <span>@{note.uploaderHandle}</span>
+                        <span>{note.uploaderName || note.uploaderHandle || "Contributor"}</span>
                       </span>
                       <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />

@@ -128,7 +128,7 @@ export const ModeratorsAdminPage: React.FC = () => {
 
     // Check if already assigned
     if (moderators.some((m) => m.userId === profile.id)) {
-      toast.info(`@${profile.handle} is already a moderator of this community.`);
+      toast.info(`${profile.fullName || "User"} is already a moderator of this community.`);
       return;
     }
 
@@ -142,7 +142,7 @@ export const ModeratorsAdminPage: React.FC = () => {
         }
       }
 
-      toast.success(`Assigned @${profile.handle} as moderator.`);
+      toast.success(`Assigned ${profile.fullName || "User"} as moderator.`);
       setSearchQuery("");
       setSearchResults([]);
 
@@ -165,7 +165,7 @@ export const ModeratorsAdminPage: React.FC = () => {
     if (!selectedSubjectId) return;
     if (
       !window.confirm(
-        `Are you sure you want to revoke moderation privileges for @${mod.handle} in this community?`
+        `Are you sure you want to revoke moderation privileges for ${mod.fullName || "this moderator"} in this community?`
       )
     ) {
       return;
@@ -181,7 +181,7 @@ export const ModeratorsAdminPage: React.FC = () => {
         }
       }
 
-      toast.success(`Revoked moderation privileges for @${mod.handle}.`);
+      toast.success(`Revoked moderation privileges for ${mod.fullName || "moderator"}.`);
       await loadModerators(selectedSubjectId);
 
       // If target is current user, refresh active profile
@@ -300,23 +300,21 @@ export const ModeratorsAdminPage: React.FC = () => {
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <Avatar className="h-9 w-9">
-                        {mod.avatarUrl && <AvatarImage src={mod.avatarUrl} alt={mod.handle} />}
+                        {mod.avatarUrl && <AvatarImage src={mod.avatarUrl} alt={mod.fullName || "Moderator"} />}
                         <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
-                          {(mod.handle || "M").slice(0, 2).toUpperCase()}
+                          {(mod.fullName || "M").slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 leading-tight">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-foreground truncate">
-                            {mod.fullName || `@${mod.handle}`}
+                            {mod.fullName || "Moderator"}
                           </span>
                           <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/40 text-primary">
                             Moderator
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                          <span>@{mod.handle}</span>
-                          <span>•</span>
                           <span className="flex items-center gap-1 text-[11px]">
                             <Calendar className="h-3 w-3" />
                             Since {new Date(mod.createdAt).toLocaleDateString()}
@@ -356,7 +354,7 @@ export const ModeratorsAdminPage: React.FC = () => {
                 <span>Assign Moderator</span>
               </CardTitle>
               <CardDescription className="text-xs">
-                Search students by handle or full name to designate them as a moderator for{" "}
+                Search students by name to designate them as a moderator for{" "}
                 <span className="font-semibold text-foreground">{selectedSubject?.code || "this subject"}</span>.
               </CardDescription>
             </CardHeader>
@@ -367,7 +365,7 @@ export const ModeratorsAdminPage: React.FC = () => {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="text"
-                  placeholder="Search by handle or name..."
+                  placeholder="Search by name..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 text-xs h-9"
@@ -394,9 +392,8 @@ export const ModeratorsAdminPage: React.FC = () => {
                         >
                           <div className="min-w-0 leading-tight">
                             <p className="text-xs font-semibold text-foreground truncate">
-                              {profile.fullName || `@${profile.handle}`}
+                              {profile.fullName || "Student"}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">@{profile.handle}</p>
                           </div>
 
                           <Button

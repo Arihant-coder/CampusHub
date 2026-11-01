@@ -231,10 +231,6 @@ export default function CreatePostPage() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-
-          <div className="text-xs text-muted-foreground font-medium">
-            Drafts <span className="font-semibold text-foreground">0</span>
-          </div>
         </div>
 
         {/* Create Post Form (Directly on canvas - NO CARD BORDER) */}

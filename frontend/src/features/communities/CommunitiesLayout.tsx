@@ -6,13 +6,14 @@
 
 import React, { useEffect, useState } from "react";
 import { Outlet, useParams, useNavigate } from "react-router-dom";
-import { Settings } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { HeaderActions, HeaderCenter } from "@/lib/header-context";
 import { Button } from "@/components/ui/button";
 import { SubjectForumsSidebar } from "./components/SubjectForumsSidebar";
 import { GlobalSearchBar } from "./components/GlobalSearchBar";
 import { usePersistentToggle } from "@/lib/use-persistent-toggle";
 import { communitiesService } from "./services";
+import { useAuth } from "@/lib/auth-context";
 import type { SubjectForum } from "./services/types";
 
 export interface CommunitiesContextType {
@@ -24,10 +25,16 @@ export interface CommunitiesContextType {
 export default function CommunitiesLayout() {
   const { subjectId } = useParams<{ subjectId?: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [isSidebarOpen, setIsSidebarOpen] = usePersistentToggle("campushub:sidebar:communities", true);
   const [forums, setForums] = useState<SubjectForum[]>([]);
   const [activeForum, setActiveForum] = useState<SubjectForum | null>(null);
+
+  const isStaff = Boolean(
+    user?.role === "admin" ||
+      (user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0)
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -62,14 +69,24 @@ export default function CommunitiesLayout() {
       {/* Top Header Actions (Right) */}
       <HeaderActions>
         <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-            title="Community Settings"
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+          {isStaff && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                navigate(
+                  activeForum
+                    ? `/communities/${activeForum.id}/moderation`
+                    : "/communities/moderation"
+                )
+              }
+              className="h-8 gap-1.5 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10 shadow-xs cursor-pointer"
+              title="Moderation Queue"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Review Queue</span>
+            </Button>
+          )}
         </div>
       </HeaderActions>
 

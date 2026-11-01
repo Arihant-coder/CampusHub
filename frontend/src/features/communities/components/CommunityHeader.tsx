@@ -91,7 +91,7 @@ export function CommunityHeader({ forum }: CommunityHeaderProps) {
                   variant="outline"
                   className="text-[11px] font-normal py-0 px-1.5 border-border/70"
                 >
-                  @{m.handle}
+                  {m.fullName || "Moderator"}
                 </Badge>
               ))
             ) : (
