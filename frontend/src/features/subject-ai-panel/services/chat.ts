@@ -27,12 +27,21 @@ async function getAuthToken(): Promise<string> {
   throw new ChatApiError("Please log in again.", 401);
 }
 
-async function toApiError(response: Response): Promise<ChatApiError> {
+async function toApiError(
+  response: Response,
+  subjectId?: string,
+): Promise<ChatApiError> {
   let detail: any = null;
   try {
     detail = (await response.json()).detail;
   } catch {
     // response had no JSON body
+  }
+
+  if (response.status === 404 && typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("campushub:study-materials-invalid", {
+      detail: { subjectId },
+    }));
   }
 
   if (response.status === 429) {
@@ -52,6 +61,7 @@ async function toApiError(response: Response): Promise<ChatApiError> {
 export async function* streamChat(params: {
   subjectId: string;
   messages: ChatMessage[];
+  materialIds?: string[];
   documents?: ChatDocument[];
   signal?: AbortSignal;
   subjectName?: string,
@@ -68,13 +78,14 @@ export async function* streamChat(params: {
       subject_id: params.subjectId,
       subject_name: params.subjectName,
       messages: params.messages,
+      material_ids: params.materialIds ?? [],
       documents: params.documents ?? [],
     }),
     signal: params.signal,
   });
 
   if (!response.ok || !response.body) {
-    throw await toApiError(response);
+    throw await toApiError(response, params.subjectId);
   }
 
   const reader = response.body.getReader();

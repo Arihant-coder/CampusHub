@@ -26,6 +26,7 @@ class ChatRequest(BaseModel):
     subject_id: str = Field(min_length=1, max_length=50)
     messages: list[Message] = Field(min_length=1, max_length=40)
     documents: list[ContextDocument] = Field(default_factory=list, max_length=5)
+    material_ids: list[str] = Field(default_factory=list, max_length=5)
     subject_name: str | None = Field(default=None, max_length=100)
     
     @model_validator(mode="after")
@@ -33,6 +34,8 @@ class ChatRequest(BaseModel):
         total = sum(len(d.text) for d in self.documents)
         if total > MAX_TOTAL_DOC_CHARS:
             raise ValueError(f"Documents are too large in total (max {MAX_TOTAL_DOC_CHARS} characters)")
+        if len(set(self.material_ids)) != len(self.material_ids):
+            raise ValueError("Duplicate study material IDs are not allowed")
         return self
 
 

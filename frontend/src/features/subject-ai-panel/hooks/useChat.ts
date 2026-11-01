@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { ChatApiError, streamChat, type ChatMessage } from "../services/chat";
 
 export type UiMessage = {
@@ -8,7 +8,26 @@ export type UiMessage = {
   isError?: boolean;
 };
 
+export type SubjectChatState = {
+  messages: UiMessage[];
+  isStreaming: boolean;
+};
+
 const MAX_HISTORY = 20;
+
+// Clean up any legacy persistent storage so refreshes/restarts always start fresh
+if (typeof window !== "undefined") {
+  try {
+    for (let i = sessionStorage.length - 1; i >= 0; i--) {
+      const key = sessionStorage.key(i);
+      if (key?.startsWith("campushub:subject_ai_chat:")) {
+        sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 // What we send to the backend: no error bubbles, no empty bubbles,
 // roles alternating, starting with a user message, capped in length.
@@ -41,69 +60,152 @@ function friendlyError(e: unknown): string {
   return "Couldn't reach the server. Check your connection and try again.";
 }
 
-export function useChat(subjectId: string, subjectName?: string) {
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const abortRef = useRef<AbortController | null>(null);
+// In-memory background state:
+// - Persists in memory across client route switches (dashboard, communities, subjects)
+// - Keeps active streaming requests alive in the background
+// - Resets completely on page refresh or server restart
+const DEFAULT_STATE: SubjectChatState = {
+  messages: [],
+  isStreaming: false,
+};
 
-  // Cancel any in-flight request if the panel unmounts
-  useEffect(() => () => abortRef.current?.abort(), []);
+const subjectStates = new Map<string, SubjectChatState>();
+const activeAbortControllers = new Map<string, AbortController>();
+const listeners = new Set<() => void>();
 
-  // Runs one request. `base` must end with the user message being answered.
-  const run = useCallback(
-    async (base: UiMessage[]) => {
-      const botId = crypto.randomUUID();
-      const history = buildHistory(base);
+function notify() {
+  for (const listener of listeners) {
+    listener();
+  }
+}
 
-      setMessages([...base, { id: botId, role: "assistant", content: "" }]);
-      setIsStreaming(true);
+function getSubjectSnapshot(subjectId: string): SubjectChatState {
+  if (!subjectId) return DEFAULT_STATE;
+  let state = subjectStates.get(subjectId);
+  if (!state) {
+    state = {
+      messages: [],
+      isStreaming: false,
+    };
+    subjectStates.set(subjectId, state);
+  }
+  return state;
+}
 
-      const controller = new AbortController();
-      abortRef.current = controller;
+function updateSubjectState(
+  subjectId: string,
+  updater: (prev: SubjectChatState) => SubjectChatState
+) {
+  const current = getSubjectSnapshot(subjectId);
+  const next = updater(current);
+  subjectStates.set(subjectId, next);
+  notify();
+}
 
-      const patchBot = (fn: (m: UiMessage) => UiMessage) =>
-        setMessages((prev) => prev.map((m) => (m.id === botId ? fn(m) : m)));
+async function runStream(
+  subjectId: string,
+  subjectName: string | undefined,
+  base: UiMessage[],
+  materialIds: string[],
+) {
+  if (!subjectId) return;
 
-      try {
-        for await (const ev of streamChat({
-          subjectId,
-          subjectName,
-          messages: history,
-          signal: controller.signal,
-        })) {
-          if (ev.type === "token") {
-            patchBot((m) => ({ ...m, content: m.content + ev.text }));
-          } else if (ev.type === "error") {
-            patchBot((m) => ({ ...m, content: ev.message, isError: true }));
-          }
-        }
-      } catch (e) {
-        if (controller.signal.aborted) {
-          // User pressed Stop: keep what arrived, drop the bubble if it's empty
-          setMessages((prev) => prev.filter((m) => !(m.id === botId && m.content === "")));
-        } else {
-          patchBot((m) => ({ ...m, content: friendlyError(e), isError: true }));
-        }
-      } finally {
-        setIsStreaming(false);
-        abortRef.current = null;
+  // Cancel any prior in-flight stream for this specific subject
+  activeAbortControllers.get(subjectId)?.abort();
+
+  const botId = crypto.randomUUID();
+  const history = buildHistory(base);
+
+  // Set streaming state with an initial empty assistant bubble (displays "Thinking…")
+  updateSubjectState(subjectId, (prev) => ({
+    ...prev,
+    messages: [...base, { id: botId, role: "assistant", content: "" }],
+    isStreaming: true,
+  }));
+
+  const controller = new AbortController();
+  activeAbortControllers.set(subjectId, controller);
+
+  try {
+    for await (const ev of streamChat({
+      subjectId,
+      subjectName,
+      messages: history,
+      materialIds,
+      signal: controller.signal,
+    })) {
+      if (ev.type === "token") {
+        updateSubjectState(subjectId, (prev) => ({
+          ...prev,
+          messages: prev.messages.map((m) =>
+            m.id === botId ? { ...m, content: m.content + ev.text } : m
+          ),
+        }));
+      } else if (ev.type === "error") {
+        updateSubjectState(subjectId, (prev) => ({
+          ...prev,
+          messages: prev.messages.map((m) =>
+            m.id === botId ? { ...m, content: ev.message, isError: true } : m
+          ),
+        }));
       }
-    },
-    [subjectId, subjectName],
+    }
+  } catch (e) {
+    if (controller.signal.aborted) {
+      // User pressed Stop: keep what arrived, drop the bubble if it's empty
+      updateSubjectState(subjectId, (prev) => ({
+        ...prev,
+        messages: prev.messages.filter(
+          (m) => !(m.id === botId && m.content === "")
+        ),
+      }));
+    } else {
+      updateSubjectState(subjectId, (prev) => ({
+        ...prev,
+        messages: prev.messages.map((m) =>
+          m.id === botId ? { ...m, content: friendlyError(e), isError: true } : m
+        ),
+      }));
+    }
+  } finally {
+    if (activeAbortControllers.get(subjectId) === controller) {
+      activeAbortControllers.delete(subjectId);
+    }
+    updateSubjectState(subjectId, (prev) => ({
+      ...prev,
+      isStreaming: false,
+    }));
+  }
+}
+
+export function useChat(subjectId: string, subjectName?: string) {
+  const subscribe = useCallback((callback: () => void) => {
+    listeners.add(callback);
+    return () => {
+      listeners.delete(callback);
+    };
+  }, []);
+
+  const getSnapshot = useCallback(
+    () => getSubjectSnapshot(subjectId),
+    [subjectId]
   );
 
+  const state = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const { messages, isStreaming } = state;
+
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, materialIds: string[] = []) => {
       const content = text.trim();
       if (!content || isStreaming) return;
       const userMsg: UiMessage = { id: crypto.randomUUID(), role: "user", content };
-      await run([...messages, userMsg]);
+      await runStream(subjectId, subjectName, [...messages, userMsg], materialIds);
     },
-    [messages, isStreaming, run],
+    [subjectId, subjectName, messages, isStreaming],
   );
 
   // Re-answers the last question. Also used by "Try again" on an error bubble.
-  const regenerate = useCallback(async () => {
+  const regenerate = useCallback(async (materialIds: string[] = []) => {
     if (isStreaming) return;
     let lastUser = -1;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -113,28 +215,34 @@ export function useChat(subjectId: string, subjectName?: string) {
       }
     }
     if (lastUser === -1) return;
-    await run(messages.slice(0, lastUser + 1));
-  }, [messages, isStreaming, run]);
+    await runStream(subjectId, subjectName, messages.slice(0, lastUser + 1), materialIds);
+  }, [subjectId, subjectName, messages, isStreaming]);
 
   // Edits a previously sent question and re-runs the answer
   const edit = useCallback(
-    async (id: string, newText: string) => {
+    async (id: string, newText: string, materialIds: string[] = []) => {
       const content = newText.trim();
       if (!content || isStreaming) return;
       const index = messages.findIndex((m) => m.id === id);
       if (index === -1) return;
       const updatedUserMsg: UiMessage = { ...messages[index], content };
-      await run([...messages.slice(0, index), updatedUserMsg]);
+      await runStream(subjectId, subjectName, [...messages.slice(0, index), updatedUserMsg], materialIds);
     },
-    [messages, isStreaming, run],
+    [subjectId, subjectName, messages, isStreaming],
   );
 
-  const stop = useCallback(() => abortRef.current?.abort(), []);
+  const stop = useCallback(() => {
+    activeAbortControllers.get(subjectId)?.abort();
+  }, [subjectId]);
 
   const clear = useCallback(() => {
-    abortRef.current?.abort();
-    setMessages([]);
-  }, []);
+    activeAbortControllers.get(subjectId)?.abort();
+    activeAbortControllers.delete(subjectId);
+    updateSubjectState(subjectId, () => ({
+      messages: [],
+      isStreaming: false,
+    }));
+  }, [subjectId]);
 
   return { messages, isStreaming, send, regenerate, edit, stop, clear };
 }
