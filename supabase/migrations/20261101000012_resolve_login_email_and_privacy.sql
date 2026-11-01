@@ -42,6 +42,11 @@ BEGIN
 END;
 $$;
 
--- 3. Grants for anon and authenticated users
+-- 3. Grandfather existing users: they've never seen the modal, so mark them as done
+UPDATE public.profiles
+SET privacy_onboarding_completed = true
+WHERE privacy_onboarding_completed = false;
+
+-- 4. Grants for anon and authenticated users
 GRANT EXECUTE ON FUNCTION public.resolve_login_email(text) TO anon, authenticated;
 
