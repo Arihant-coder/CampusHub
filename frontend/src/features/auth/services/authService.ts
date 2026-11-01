@@ -413,7 +413,22 @@ export const authService = {
   },
 
   /**
-   * Live Supabase: Fetch profile strictly from public.profiles table.
+   * Retrieves current active mock user profile from storage.
+   */
+  getMockUser(): UserProfile | null {
+    try {
+      const item = localStorage.getItem(MOCK_STORAGE_KEY);
+      if (item) {
+        return JSON.parse(item) as UserProfile;
+      }
+    } catch {
+      // Ignore
+    }
+    return null;
+  },
+
+  /**
+   * Live Supabase: Fetch profile strictly from public.profiles table and community_moderators.
    */
   async getLiveProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await supabase
@@ -424,6 +439,13 @@ export const authService = {
 
     if (error || !data) return null;
 
+    const { data: modRows } = await supabase
+      .from("community_moderators")
+      .select("subject_id")
+      .eq("user_id", userId);
+
+    const moderatedSubjectIds = (modRows || []).map((r: { subject_id: string }) => r.subject_id);
+
     return {
       id: data.id,
       handle: data.handle,
@@ -431,6 +453,7 @@ export const authService = {
       avatarUrl: data.avatar_url,
       role: data.role as UserRole,
       createdAt: data.created_at,
+      moderatedSubjectIds,
     };
   },
 };

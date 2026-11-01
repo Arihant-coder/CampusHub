@@ -323,7 +323,7 @@ Every developer owns **one isolated feature directory**. Features must never imp
 | :--- | :--- | :--- | :--- | :--- |
 | **[`features/auth/`](src/features/auth/)** | `/login`, `/signup` | Supabase Auth UI / Mock Account presets | Core Supabase Auth | **Active** |
 | **[`features/dashboard/`](src/features/dashboard/)** | `/` | Direct **Supabase** (`profiles`, `subjects`, `enrollments`) | *None* | **Active** |
-| **[`features/communities/`](src/features/communities/)** | `/communities`, `/communities/:subjectId`, `/communities/post/:postId` | Direct **Supabase** (`posts`, `comments`, `notes`, `vote_post` RPC) | *None* | **Active** |
+| **[`features/communities/`](src/features/communities/)** | `/communities`, `/communities/:subjectId`, `/communities/share`, `/communities/moderation` | Direct **Supabase** (`posts`, `comments`, `notes`, `vote_post` RPC, `approve_note` RPC) | *None* | **Active** |
 | **[`features/subject-viewer/`](src/features/subject-viewer/)** | `/subjects/:subjectId` (Main Canvas) | Direct **Supabase** (`subjects`, `notes`, `subject-notes` bucket) | *None* | **Scaffolded** |
 | **[`features/subject-ai-panel/`](src/features/subject-ai-panel/)** | `/subjects/:subjectId` (Right Drawer) | **FastAPI** (`/api/v1/subjects-ai/*`) | [`backend/features/subjects_ai/`](../backend/features/subjects_ai/README.md) | **Active** |
 | **[`features/daily-quiz/`](src/features/daily-quiz/)** | `/daily-quiz` | **FastAPI** `/api/v1/daily-quiz/*` + Supabase `user_streaks` | [`backend/features/daily_quiz/`](../backend/features/daily_quiz/README.md) | **Active** |
@@ -355,12 +355,15 @@ Every developer owns **one isolated feature directory**. Features must never imp
   - `/communities/:subjectId`: Subject-filtered forum feed.
   - `/communities/new` or `/communities/:subjectId/new`: Rich post creation editor.
   - `/communities/post/:postId`: Threaded discussion post detail view.
+  - `/communities/share` or `/communities/:subjectId/share`: Academic resource submission workflow.
+  - `/communities/moderation` or `/communities/:subjectId/moderation`: Staff-only review queue (`RoleRoute`).
 - **Key Capabilities**:
   - **Markdown & Math**: `FormattedText.tsx` renders GitHub Flavored Markdown, inline code blocks, tables, and KaTeX LaTeX math equations.
   - **Nested Comments**: `CommentTree.tsx` supports multi-level replies, collapse/expand toggles, and relative timestamps.
   - **Interactive Voting**: Upvote/downvote counter with optimistic UI updates.
   - **Media & Attachments**: Image carousel with fullscreen lightbox modal (`useImageViewer`).
-  - **Resource Archive**: Tabular view of subject-related downloadable study materials.
+  - **In-Browser PDF Compression Studio**: `PdfOptimizerModal.tsx` provides 100% client-side compression presets (Low, Balanced, High, Extreme) and continuous sliders with live side-by-side legibility comparison.
+  - **Scarcity & Moderation Queue**: Student submissions are queued for review; admins/moderators review, categorize, and approve or reject notes. On approval, files migrate to community shared storage and release the student's personal storage quota.
 
 ### 4. Subject Workspace (`features/subject-viewer` & `features/subject-ai-panel`)
 - **Routes**: `/subjects`, `/subjects/:subjectId`

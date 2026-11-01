@@ -12,8 +12,13 @@ import type {
   Comment,
   ResourceNote,
   ResourceType,
+  ResourceCategory,
   GlobalSearchResult,
+  CommunityModerator,
+  ProfileSearchResult,
+  Report,
 } from "./types";
+import type { UserRole } from "@/shared/user";
 
 const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
   {
@@ -468,46 +473,143 @@ const INITIAL_RESOURCES: ResourceNote[] = [
   {
     id: "n1",
     subjectId: "cs301",
+    userId: "mock-student-uuid",
     title: "Day1-ABCD.pdf",
     type: "Note",
     category: "Day wise",
     uploaderHandle: "Hashpotato",
     pageCount: 24,
-    storagePath: "notes/cs301/day1-abcd.pdf",
+    fileSizeBytes: 2450000,
+    storagePath: "community/cs301/day1-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 4).toISOString(),
+    status: "approved",
+    isShared: true,
   },
   {
     id: "n2",
     subjectId: "cs301",
+    userId: "mock-student-uuid",
     title: "Day2-ABCD.pdf",
     type: "Note",
     category: "Day wise",
     uploaderHandle: "Hashpotato",
     pageCount: 21,
-    storagePath: "notes/cs301/day2-abcd.pdf",
+    fileSizeBytes: 1890000,
+    storagePath: "community/cs301/day2-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 3).toISOString(),
+    status: "approved",
+    isShared: true,
   },
   {
     id: "n3",
     subjectId: "cs301",
+    userId: "mock-student-uuid",
     title: "Day3-ABCD.pdf",
     type: "Note",
     category: "Day wise",
     uploaderHandle: "Hashpotato",
     pageCount: 18,
-    storagePath: "notes/cs301/day3-abcd.pdf",
+    fileSizeBytes: 1420000,
+    storagePath: "community/cs301/day3-abcd.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1).toISOString(),
+    status: "approved",
+    isShared: true,
   },
   {
     id: "q1",
     subjectId: "cs301",
+    userId: "mock-student-uuid",
     title: "2023 End sem.pdf",
     type: "PYQ",
     category: "Other",
     uploaderHandle: "Hashpotato",
     pageCount: 2,
-    storagePath: "pyqs/cs301/2023-endsem.pdf",
+    fileSizeBytes: 950000,
+    storagePath: "community/cs301/2023-endsem.pdf",
     createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
+    status: "approved",
+    isShared: true,
+  },
+  {
+    id: "p1",
+    subjectId: "cs301",
+    userId: "mock-user-4",
+    title: "Unit 3 TCP/IP Subnetting Cheat Sheet.pdf",
+    type: "Note",
+    category: "Unit wise",
+    uploaderHandle: "student_coder",
+    pageCount: 6,
+    fileSizeBytes: 1200000,
+    storagePath: "staging/cs301/tcp-ip-subnetting.pdf",
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    status: "pending",
+    isShared: false,
+  },
+];
+
+let communityModerators: CommunityModerator[] = [
+  {
+    subjectId: "cs301",
+    userId: "mock-moderator-uuid",
+    assignedBy: "mock-admin-uuid",
+    createdAt: "2026-08-15T10:00:00Z",
+    handle: "morgan_t",
+    fullName: "Morgan Taylor",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&h=128&fit=crop&crop=faces&q=80",
+  },
+  {
+    subjectId: "cs302",
+    userId: "mock-moderator-uuid",
+    assignedBy: "mock-admin-uuid",
+    createdAt: "2026-08-15T10:00:00Z",
+    handle: "morgan_t",
+    fullName: "Morgan Taylor",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&h=128&fit=crop&crop=faces&q=80",
+  },
+  {
+    subjectId: "dbms",
+    userId: "mock-moderator-uuid",
+    assignedBy: "mock-admin-uuid",
+    createdAt: "2026-08-15T10:00:00Z",
+    handle: "morgan_t",
+    fullName: "Morgan Taylor",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&h=128&fit=crop&crop=faces&q=80",
+  },
+  {
+    subjectId: "cn",
+    userId: "mock-moderator-uuid",
+    assignedBy: "mock-admin-uuid",
+    createdAt: "2026-08-15T10:00:00Z",
+    handle: "morgan_t",
+    fullName: "Morgan Taylor",
+    avatarUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=128&h=128&fit=crop&crop=faces&q=80",
+  },
+];
+
+let mockReports: Report[] = [
+  {
+    id: "rep-1",
+    subjectId: "cs301",
+    reporterId: "mock-student-uuid",
+    targetType: "post",
+    targetId: "post-1",
+    reason: "Off-topic content and spam links in comment section.",
+    status: "pending",
+    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    reporterHandle: "alex_chen",
+  },
+  {
+    id: "rep-2",
+    subjectId: "cs302",
+    reporterId: "mock-student-uuid",
+    targetType: "comment",
+    targetId: "c-101",
+    reason: "Inappropriate language towards peers.",
+    status: "pending",
+    createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    updatedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    reporterHandle: "alex_chen",
   },
 ];
 
@@ -834,9 +936,52 @@ export const mockCommunitiesService: CommunitiesService = {
   async getResources(subjectId: string, type: ResourceType): Promise<Result<ResourceNote[]>> {
     await new Promise((resolve) => setTimeout(resolve, 200));
     const filtered = resources
-      .filter((r) => r.subjectId === subjectId && r.type === type)
+      .filter((r) => r.subjectId === subjectId && r.type === type && (r.status === "approved" || r.isShared === true))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     return { data: filtered, error: null };
+  },
+
+  async getPendingResources(subjectId?: string): Promise<Result<ResourceNote[]>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    let pending = resources.filter((r) => r.status === "pending" || r.isShared === false);
+    if (subjectId) {
+      pending = pending.filter((r) => r.subjectId === subjectId);
+    }
+    pending.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return { data: [...pending], error: null };
+  },
+
+  async approveResource(resourceId: string, category?: ResourceCategory): Promise<Result<ResourceNote>> {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const idx = resources.findIndex((r) => r.id === resourceId);
+    if (idx === -1) {
+      return {
+        data: null,
+        error: { code: "NOT_FOUND", message: "Resource not found in moderation queue." },
+      };
+    }
+    const updated: ResourceNote = {
+      ...resources[idx],
+      status: "approved",
+      isShared: true,
+      category: category || resources[idx].category || "Other",
+      storagePath: `community/${resources[idx].subjectId}/${resources[idx].title}`,
+    };
+    resources[idx] = updated;
+    return { data: updated, error: null };
+  },
+
+  async rejectResource(resourceId: string): Promise<Result<boolean>> {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const idx = resources.findIndex((r) => r.id === resourceId);
+    if (idx === -1) {
+      return {
+        data: null,
+        error: { code: "NOT_FOUND", message: "Resource not found in moderation queue." },
+      };
+    }
+    resources = resources.filter((r) => r.id !== resourceId);
+    return { data: true, error: null };
   },
 
   async uploadResource(data): Promise<Result<ResourceNote>> {
@@ -844,15 +989,139 @@ export const mockCommunitiesService: CommunitiesService = {
     const newResource: ResourceNote = {
       id: `r-${Date.now()}`,
       subjectId: data.subjectId,
+      userId: "mock-student-uuid",
       title: data.title,
       type: data.type,
       category: data.category || "Other",
       uploaderHandle: "Hashpotato",
       pageCount: data.pageCount || (Math.floor(Math.random() * 20) + 2),
-      storagePath: `resources/${data.subjectId}/${data.title}`,
+      fileSizeBytes: data.file?.size || 1500000,
+      storagePath: `staging/${data.subjectId}/${data.title}`,
       createdAt: new Date().toISOString(),
+      status: "pending",
+      isShared: false,
     };
     resources = [newResource, ...resources];
     return { data: newResource, error: null };
+  },
+
+  async deleteResource(resourceId: string): Promise<Result<boolean>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    resources = resources.filter((r) => r.id !== resourceId);
+    return { data: true, error: null };
+  },
+
+  async deletePost(postId: string): Promise<Result<boolean>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    posts = posts.filter((p) => p.id !== postId);
+    return { data: true, error: null };
+  },
+
+  async deleteComment(commentId: string): Promise<Result<boolean>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const toDelete = new Set<string>([commentId]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const c of comments) {
+        if (c.parentId && toDelete.has(c.parentId) && !toDelete.has(c.id)) {
+          toDelete.add(c.id);
+          added = true;
+        }
+      }
+    }
+    comments = comments.filter((c) => !toDelete.has(c.id));
+    return { data: true, error: null };
+  },
+
+  async getCommunityModerators(subjectId: string): Promise<Result<CommunityModerator[]>> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const matched = communityModerators.filter((m) => m.subjectId === subjectId);
+    return { data: matched, error: null };
+  },
+
+  async assignModerator(subjectId: string, userId: string): Promise<Result<void>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const existing = communityModerators.find(
+      (m) => m.subjectId === subjectId && m.userId === userId
+    );
+    if (!existing) {
+      const handle =
+        userId === "mock-student-uuid"
+          ? "alex_chen"
+          : userId === "mock-moderator-uuid"
+          ? "morgan_t"
+          : "user_" + userId.slice(0, 5);
+      const fullName =
+        userId === "mock-student-uuid"
+          ? "Alex Chen"
+          : userId === "mock-moderator-uuid"
+          ? "Morgan Taylor"
+          : "User " + userId.slice(0, 5);
+
+      communityModerators.push({
+        subjectId,
+        userId,
+        assignedBy: "mock-admin-uuid",
+        createdAt: new Date().toISOString(),
+        handle,
+        fullName,
+      });
+    }
+    return { data: undefined, error: null };
+  },
+
+  async removeModerator(subjectId: string, userId: string): Promise<Result<void>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    communityModerators = communityModerators.filter(
+      (m) => !(m.subjectId === subjectId && m.userId === userId)
+    );
+    return { data: undefined, error: null };
+  },
+
+  async searchProfilesForAdmin(query: string): Promise<Result<ProfileSearchResult[]>> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const q = query.toLowerCase().trim();
+    const candidateProfiles: ProfileSearchResult[] = [
+      { id: "mock-student-uuid", handle: "alex_chen", fullName: "Alex Chen" },
+      { id: "mock-moderator-uuid", handle: "morgan_t", fullName: "Morgan Taylor" },
+      { id: "mock-admin-uuid", handle: "sarah_vance", fullName: "Dr. Sarah Vance" },
+      { id: "mock-user-4", handle: "jordan_lee", fullName: "Jordan Lee" },
+      { id: "mock-user-5", handle: "priya_sharma", fullName: "Priya Sharma" },
+    ];
+    const filtered = candidateProfiles.filter(
+      (p) =>
+        p.handle.toLowerCase().includes(q) ||
+        (p.fullName && p.fullName.toLowerCase().includes(q))
+    );
+    return { data: filtered.slice(0, 20), error: null };
+  },
+
+  async setUserRole(_userId: string, _role: UserRole): Promise<Result<void>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    return { data: undefined, error: null };
+  },
+
+  async getReports(subjectId?: string): Promise<Result<Report[]>> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    let result = [...mockReports];
+    if (subjectId) {
+      result = result.filter((r) => r.subjectId === subjectId);
+    }
+    return { data: result, error: null };
+  },
+
+  async resolveReport(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const idx = mockReports.findIndex((r) => r.id === reportId);
+    if (idx !== -1) {
+      mockReports[idx] = {
+        ...mockReports[idx],
+        status,
+        resolvedBy: "mock-admin-uuid",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return { data: true, error: null };
   },
 };

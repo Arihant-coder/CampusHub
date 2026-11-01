@@ -14,8 +14,13 @@ import type {
   Comment,
   ResourceNote,
   ResourceType,
+  ResourceCategory,
   GlobalSearchResult,
+  CommunityModerator,
+  ProfileSearchResult,
+  Report,
 } from "./types";
+import type { UserRole } from "@/shared/user";
 import { uploadCommunityImage } from "../utils/storageUpload";
 
 /**
@@ -314,7 +319,7 @@ export const realCommunitiesService: CommunitiesService = {
       const uploadedImageUrls: string[] = [];
       for (const img of rawImages) {
         if (img.startsWith("data:") || img.startsWith("blob:")) {
-          const publicUrl = await uploadCommunityImage(img, user.id);
+          const publicUrl = await uploadCommunityImage(img, user.id, data.subjectId);
           uploadedImageUrls.push(publicUrl);
         } else {
           uploadedImageUrls.push(img);
@@ -532,12 +537,20 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
+      // Look up post subject_id for storage folder routing: {subjectId}/{userId}/{uuid}.webp
+      const { data: postRecord } = await supabase
+        .from("posts")
+        .select("subject_id")
+        .eq("id", postId)
+        .maybeSingle();
+      const subjectId = postRecord?.subject_id || "general";
+
       // Convert any base64 data URLs to Supabase Storage CDN URLs
       const uploadedImageUrls: string[] = [];
       if (images && images.length > 0) {
         for (const img of images) {
           if (img.startsWith("data:") || img.startsWith("blob:")) {
-            const publicUrl = await uploadCommunityImage(img, user.id);
+            const publicUrl = await uploadCommunityImage(img, user.id, subjectId);
             uploadedImageUrls.push(publicUrl);
           } else {
             uploadedImageUrls.push(img);
@@ -691,6 +704,7 @@ export const realCommunitiesService: CommunitiesService = {
       const notes: ResourceNote[] = (data || []).map((row: any) => ({
         id: row.id,
         subjectId: row.subject_id,
+        userId: row.user_id,
         title: row.title,
         type: row.tag === "PYQ" ? "PYQ" : "Note",
         category: (row.description && ["Day wise", "Unit wise", "Other"].includes(row.description))
@@ -750,7 +764,7 @@ export const realCommunitiesService: CommunitiesService = {
         };
       }
 
-      // 2. Insert record into public.notes
+      // 2. Insert record into public.notes (queued as pending for moderation)
       const { data: inserted, error: insertError } = await supabase
         .from("notes")
         .insert({
@@ -760,7 +774,8 @@ export const realCommunitiesService: CommunitiesService = {
           description: data.category || "Other",
           storage_path: storagePath,
           tag: data.type === "PYQ" ? "PYQ" : "Lecture",
-          is_shared: true,
+          is_shared: false,
+          status: "pending",
           file_size_bytes: data.file.size,
           page_count: data.pageCount || 1,
         })
@@ -830,6 +845,253 @@ export const realCommunitiesService: CommunitiesService = {
         data: null,
         error: { code: "NETWORK", message: (err as Error).message },
       };
+    }
+  },
+
+  async getPendingResources(subjectId?: string): Promise<Result<ResourceNote[]>> {
+    try {
+      let query = supabase
+        .from("notes")
+        .select("*, profiles!notes_user_id_fkey(handle)")
+        .eq("status", "pending");
+
+      if (subjectId) {
+        query = query.eq("subject_id", subjectId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const notes: ResourceNote[] = (data || []).map((row: any) => ({
+        id: row.id,
+        subjectId: row.subject_id,
+        userId: row.user_id,
+        title: row.title,
+        type: row.tag === "PYQ" ? "PYQ" : "Note",
+        category: (row.description && ["Day wise", "Unit wise", "Other"].includes(row.description))
+          ? (row.description as any)
+          : "Other",
+        uploaderHandle: row.profiles?.handle || "Anonymous",
+        pageCount: row.page_count ?? 1,
+        fileSizeBytes: row.file_size_bytes ?? 0,
+        storagePath: row.storage_path,
+        createdAt: row.created_at,
+        status: row.status,
+        isShared: row.is_shared,
+      }));
+
+      return { data: notes, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async approveResource(resourceId: string, category?: ResourceCategory): Promise<Result<ResourceNote>> {
+    try {
+      const { data, error } = await supabase.rpc("approve_note", {
+        p_note_id: resourceId,
+        p_category: category || "Other",
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const approved: ResourceNote = {
+        id: data.id,
+        subjectId: data.subject_id,
+        title: data.title,
+        type: data.tag === "PYQ" ? "PYQ" : "Note",
+        category: (data.description as any) || "Other",
+        uploaderHandle: "Community Contributor",
+        pageCount: data.page_count ?? 1,
+        fileSizeBytes: data.file_size_bytes ?? 0,
+        storagePath: data.storage_path,
+        createdAt: data.created_at,
+        status: "approved",
+        isShared: true,
+      };
+
+      return { data: approved, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async rejectResource(resourceId: string, reason?: string): Promise<Result<boolean>> {
+    try {
+      const { error } = await supabase.rpc("reject_note", {
+        p_note_id: resourceId,
+        p_reason: reason || null,
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getCommunityModerators(subjectId: string): Promise<Result<CommunityModerator[]>> {
+    try {
+      const { data, error } = await supabase
+        .from("community_moderators")
+        .select("subject_id, user_id, assigned_by, created_at, profiles!community_moderators_user_id_fkey(handle, full_name, avatar_url)")
+        .eq("subject_id", subjectId);
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const moderators: CommunityModerator[] = (data || []).map((row: any) => ({
+        subjectId: row.subject_id,
+        userId: row.user_id,
+        assignedBy: row.assigned_by,
+        createdAt: row.created_at,
+        handle: row.profiles?.handle || "unknown",
+        fullName: row.profiles?.full_name || null,
+        avatarUrl: row.profiles?.avatar_url || null,
+      }));
+
+      return { data: moderators, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async assignModerator(subjectId: string, userId: string): Promise<Result<void>> {
+    try {
+      const { error } = await supabase.rpc("assign_moderator", {
+        p_subject_id: subjectId,
+        p_user_id: userId,
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: undefined, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async removeModerator(subjectId: string, userId: string): Promise<Result<void>> {
+    try {
+      const { error } = await supabase.rpc("remove_moderator", {
+        p_subject_id: subjectId,
+        p_user_id: userId,
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: undefined, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async searchProfilesForAdmin(query: string): Promise<Result<ProfileSearchResult[]>> {
+    try {
+      const { data, error } = await supabase.rpc("search_profiles_for_admin", {
+        p_query: query,
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const results: ProfileSearchResult[] = (data || []).map((row: any) => ({
+        id: row.id,
+        handle: row.handle,
+        fullName: row.full_name,
+      }));
+
+      return { data: results, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async setUserRole(userId: string, role: UserRole): Promise<Result<void>> {
+    try {
+      const { error } = await supabase.rpc("set_user_role", {
+        p_user_id: userId,
+        p_role: role,
+      });
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: undefined, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getReports(subjectId?: string): Promise<Result<Report[]>> {
+    try {
+      let query = supabase
+        .from("reports")
+        .select("*, profiles!reports_reporter_id_fkey(handle)")
+        .order("created_at", { ascending: false });
+
+      if (subjectId) {
+        query = query.eq("subject_id", subjectId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const reports: Report[] = (data || []).map((row: any) => ({
+        id: row.id,
+        subjectId: row.subject_id,
+        reporterId: row.reporter_id,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        reason: row.reason,
+        status: row.status,
+        resolvedBy: row.resolved_by,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        reporterHandle: row.profiles?.handle || "anonymous",
+      }));
+
+      return { data: reports, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async resolveReport(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>> {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      const { error } = await supabase
+        .from("reports")
+        .update({
+          status,
+          resolved_by: user?.id || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", reportId);
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
     }
   },
 };

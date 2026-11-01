@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from "react";
-import { Upload, Loader2, FileUp } from "lucide-react";
+import { Upload, Loader2, FileUp, Sparkles, CheckCircle2, RotateCcw, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ResourceCategory, ResourceType } from "../services/types";
+import { PdfOptimizerModal } from "./PdfOptimizerModal";
+import { toast } from "sonner";
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -50,7 +52,36 @@ export function UploadModal({
   const [type, setType] = useState<ResourceType>(defaultType);
   const [category, setCategory] = useState<ResourceCategory>("Day wise");
   const [file, setFile] = useState<File | null>(null);
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
+  const [compressionStats, setCompressionStats] = useState<{
+    originalSize: number;
+    compressedSize: number;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isFileOverLimit = file ? file.size > 5 * 1024 * 1024 : false;
+
+  const handleApplyOptimization = (
+    compressedFile: File,
+    stats: { originalSize: number; compressedSize: number }
+  ) => {
+    setFile(compressedFile);
+    setCompressionStats(stats);
+    toast.success(
+      `Optimized from ${(stats.originalSize / (1024 * 1024)).toFixed(2)} MB to ${(
+        stats.compressedSize / (1024 * 1024)
+      ).toFixed(2)} MB!`
+    );
+  };
+
+  const handleRevert = () => {
+    if (originalFile) {
+      setFile(originalFile);
+      setCompressionStats(null);
+      toast.info("Reverted to original file.");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,10 +108,11 @@ export function UploadModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Submit Academic Resource</DialogTitle>
+          <DialogTitle>Submit Academic Resource for Review</DialogTitle>
           <DialogDescription>
-            Share lecture notes or exam question papers with the{" "}
-            <span className="font-semibold text-foreground">{subjectName}</span> community.
+            Contribute study notes or PYQ exam papers to the{" "}
+            <span className="font-semibold text-foreground">{subjectName}</span> community. An admin or
+            moderator will review and publish it.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,14 +173,84 @@ export function UploadModal({
                 className="hidden"
                 onChange={(e) => {
                   if (e.target.files?.[0]) {
-                    setFile(e.target.files[0]);
+                    const selected = e.target.files[0];
+                    setFile(selected);
+                    setOriginalFile(selected);
+                    setCompressionStats(null);
                     if (!title) {
-                      setTitle(e.target.files[0].name);
+                      setTitle(selected.name.replace(/\.pdf$/i, ""));
                     }
                   }
                 }}
               />
             </label>
+
+            {/* Optimizer banner if PDF selected */}
+            {file && (
+              <div className="rounded-lg border p-2.5 bg-card/60 space-y-1.5 text-xs">
+                {isFileOverLimit ? (
+                  <div className="flex items-center justify-between gap-2 text-destructive font-medium flex-wrap">
+                    <div className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{(file.size / (1024 * 1024)).toFixed(2)} MB (exceeds 5 MB limit)</span>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => setIsOptimizerOpen(true)}
+                      className="h-6 text-[11px] gap-1 px-2 font-semibold cursor-pointer"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Compress & Preview
+                    </Button>
+                  </div>
+                ) : compressionStats ? (
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 text-[11px]">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      Optimized: {(compressionStats.compressedSize / (1024 * 1024)).toFixed(2)} MB
+                      (-{Math.round((1 - compressionStats.compressedSize / compressionStats.originalSize) * 100)}%)
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsOptimizerOpen(true)}
+                        className="h-5 text-[10px] gap-1 px-1.5 cursor-pointer"
+                      >
+                        Adjust
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleRevert}
+                        className="h-5 text-[10px] gap-1 px-1.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        Revert
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2 flex-wrap text-muted-foreground">
+                    <span className="text-[11px]">Size: {(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsOptimizerOpen(true)}
+                      className="h-6 text-[11px] gap-1 px-2 font-medium cursor-pointer"
+                    >
+                      <Sparkles className="h-3 w-3 text-amber-500" />
+                      <span>Optimize PDF</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
@@ -164,15 +266,23 @@ export function UploadModal({
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Uploading...
+                  Submitting...
                 </>
               ) : (
-                "Submit"
+                "Submit for Review"
               )}
             </Button>
           </DialogFooter>
         </form>
       </DialogContent>
+
+      {/* PDF Optimizer & Preview Modal */}
+      <PdfOptimizerModal
+        isOpen={isOptimizerOpen}
+        file={originalFile || file}
+        onClose={() => setIsOptimizerOpen(false)}
+        onApply={handleApplyOptimization}
+      />
     </Dialog>
   );
 }

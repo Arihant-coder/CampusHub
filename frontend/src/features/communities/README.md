@@ -17,21 +17,32 @@ The **Communities** feature unites peer discussions and academic resource sharin
 
 ```text
 frontend/src/features/communities/
-├── CommunitiesPage.tsx       # Main tabbed view: "Discussions" & "Academic Resources"
-├── routes.tsx                # Route definition (/communities and /communities/:subjectId)
-├── components/               # Sub-components isolated to communities
-│   ├── PostFeed.tsx          # Scrollable list of discussion threads with sort/filter controls
-│   ├── PostCard.tsx          # Thread preview: author, subject tag, upvotes/downvotes, reply count
-│   ├── ThreadComments.tsx    # Comment list and reply input box
-│   ├── PostComposer.tsx      # Modal/form to draft a new post with image upload
-│   ├── ResourceTable.tsx     # Filterable table of downloadable subject notes and PYQs
-│   └── UploadModal.tsx       # Upload modal for notes/PDFs (subject-notes bucket)
-├── services/                 # Data access layer
-│   ├── types.ts              # CommunitiesService interface & data models
-│   ├── mockService.ts        # Mock implementation for offline UI development
-│   ├── realService.ts        # Direct Supabase queries, RPC caller, and bucket uploaders
-│   └── index.ts              # Active service switcher governed by VITE_USE_MOCKS
-└── README.md                 # This developer guide
+├── CommunitiesPage.tsx          # Main tabbed view: "Discussions" & "Academic Resources"
+├── CommunitiesLayout.tsx        # Shell layout with subject forum sidebar
+├── CreatePostPage.tsx           # Standalone post authoring view
+├── PostDetailPage.tsx           # Full discussion view with nested comments
+├── ShareResourcePage.tsx        # Resource submission form with quota tracking
+├── ResourceModerationPage.tsx   # Admin/moderator review queue with filter, sort & category overrides
+├── routes.tsx                   # Route definitions including role-guarded /moderation
+├── components/                  # Sub-components isolated to communities
+│   ├── PostFeed.tsx             # Scrollable list of discussion threads with sort/filter controls
+│   ├── PostCard.tsx             # Thread preview: author, subject tag, upvotes/downvotes, reply count
+│   ├── ThreadComments.tsx       # Comment list and reply input box
+│   ├── CommentTree.tsx          # Recursive nested comment renderer
+│   ├── PostComposer.tsx         # Modal/form to draft a new post with image upload
+│   ├── ResourceArchive.tsx      # Sub-tabs for Notes/PYQs with moderation queue badge
+│   ├── ResourceTable.tsx        # Filterable table of downloadable subject notes and PYQs
+│   ├── UploadModal.tsx          # Quick upload modal for notes/PDFs (moderation queue)
+│   └── PdfOptimizerModal.tsx    # Client-side PDF compression studio and live preview
+├── utils/
+│   ├── pdfCompressor.ts         # In-browser WebAssembly/canvas PDF compression engine
+│   └── storageUpload.ts         # Client-side image optimization pipeline
+├── services/                    # Data access layer
+│   ├── types.ts                 # CommunitiesService interface & data models
+│   ├── mockService.ts           # Mock implementation with moderation staging & approval
+│   ├── realService.ts           # Direct Supabase queries, RPC caller, and moderation RPCs
+│   └── index.ts                 # Active service switcher governed by VITE_USE_MOCKS
+└── README.md                    # This developer guide
 ```
 
 ---
@@ -209,22 +220,45 @@ export const communitiesService: CommunitiesService = isMock
 
 ---
 
-## 3. How to Develop
+## 3. Academic Resource Scarcity & Moderation Architecture
+
+The academic resource library is designed around a **curated contribution model** to address note scarcity without degrading community quality:
+
+1. **Student Submission (`status: "pending"`, `is_shared: false`)**:
+   - Students submit notes via `ShareResourcePage` or `UploadModal`.
+   - Files are compressed locally via `PdfOptimizerModal` (100% in-browser).
+   - The file is uploaded to `{userId}/{fileName}` in the `subject-notes` bucket, temporarily counting toward the student's 50 MB personal quota.
+   - Submissions are **never** directly published to the public archive.
+2. **Staff Review & Approval (`/communities/moderation`)**:
+   - Role-guarded via `<RoleRoute allowedRoles={["admin", "moderator"]}>`.
+   - Admins/moderators inspect submissions, preview the PDF, and override the target category (`Day wise`, `Unit wise`, `Other`).
+   - **Approve (`approveResource` / `approve_note` RPC)**:
+     - File is moved to `community/{subjectId}/{fileName}` in `subject-notes`.
+     - Deletes the original `{userId}/...` object, freeing the student's personal 50 MB quota.
+     - Note is marked `is_shared = true`, `status = 'approved'`, making it publicly visible to all students.
+   - **Reject (`rejectResource` / `reject_note` RPC)**:
+     - File is purged from storage and the note record deleted, releasing the student's quota.
+
+---
+
+## 4. How to Develop
 
 1. Keep `VITE_USE_MOCKS=true` in `frontend/.env`.
 2. In `CommunitiesPage.tsx`, construct the top tabs ("Discussions" and "Academic Resources").
 3. Wire the discussions tab to `communitiesService.getPosts()`. Build `PostFeed` and `PostCard`.
 4. Implement optimistic voting when a user clicks upvote/downvote.
-5. Wire the resources tab to `communitiesService.getNotes()`. Build `ResourceTable`.
-6. Set `VITE_USE_MOCKS=false` in `frontend/.env` to test with live Supabase database and buckets.
+5. Wire the resources tab to `communitiesService.getResources()`. Build `ResourceTable`.
+6. Access `/communities/moderation` as `moderator@campushub.edu` or `admin@campushub.edu` to review pending submissions.
+7. Set `VITE_USE_MOCKS=false` in `frontend/.env` to test with live Supabase database and buckets.
 
 ---
 
-## 4. How to Test
+## 5. How to Test
 
-- **UI State Testing:** Verify empty state for posts when a newly created subject has no discussions.
-- **Vote Toggle:** Verify that clicking upvote twice removes the upvote.
-- **Type Checking:** Run from `frontend/`:
+- **Student Submission Test:** Submit a note as `student@campushub.edu` and verify it displays a pending review toast and does NOT appear in the active archive.
+- **Moderator Approval Test:** Switch account to `moderator@campushub.edu`, visit `/communities/moderation`, preview the document, select a category, and click "Approve". Verify the note now appears in the public archive.
+- **Moderator Rejection Test:** Reject a pending note and confirm it is purged from the queue.
+- **Type Checking:** Run from root:
   ```bash
-  pnpm tsc --noEmit
+  npm --prefix frontend run build
   ```

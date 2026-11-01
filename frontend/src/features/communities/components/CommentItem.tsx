@@ -14,6 +14,7 @@ import {
   Loader2,
   Image as ImageIcon,
   X,
+  Trash2,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ import { FormattedText } from "./FormattedText";
 import { RichContentEditor } from "./RichContentEditor";
 import { processCommunityImage } from "../utils/imagePipeline";
 import { useImageViewer } from "@/lib/image-viewer-context";
+import { useAuth } from "@/lib/auth-context";
+import { canModerate } from "@/shared/user";
 import { toast } from "sonner";
 import type { Comment } from "../services/types";
 
@@ -67,17 +70,22 @@ interface CommentItemProps {
   comment: Comment;
   depth?: number;
   maxDepth?: number;
+  subjectId?: string;
   onReply: (parentId: string, body: string, images?: string[]) => Promise<void>;
   onVoteComment?: (commentId: string, vote: 1 | -1 | null) => Promise<void>;
+  onDeleteComment?: (commentId: string) => Promise<void>;
 }
 
 export function CommentItem({
   comment,
   depth = 0,
   maxDepth = 12,
+  subjectId,
   onReply,
   onVoteComment,
+  onDeleteComment,
 }: CommentItemProps) {
+  const { user } = useAuth();
   const { openImageViewer } = useImageViewer();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
@@ -85,6 +93,13 @@ export function CommentItem({
   const [replyImages, setReplyImages] = useState<string[]>([]);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const effectiveSubjectId = subjectId || comment.subjectId;
+  const canDeleteComment = Boolean(
+    onDeleteComment &&
+      user &&
+      (user.id === comment.authorId || canModerate(user, effectiveSubjectId))
+  );
 
   // 12-level depth ceiling check (0-indexed depths 0..11 = 12 total levels)
   const isMaxDepth = depth >= (maxDepth - 1);
@@ -344,6 +359,19 @@ export function CommentItem({
           <Share2 className="h-3 w-3" />
           <span>Share</span>
         </button>
+
+        {/* Delete Button (Ownership or Community Moderator / Admin) */}
+        {canDeleteComment && (
+          <button
+            type="button"
+            onClick={() => onDeleteComment?.(comment.id)}
+            className="flex items-center gap-1 text-[11px] font-medium text-destructive/80 hover:text-destructive px-2 py-1 rounded-md hover:bg-destructive/10 transition-colors cursor-pointer"
+            title="Delete comment"
+          >
+            <Trash2 className="h-3 w-3" />
+            <span>Delete</span>
+          </button>
+        )}
       </div>
 
       {/* Inline Reply Editor Box (Single rounded rectangle box) */}
@@ -454,8 +482,10 @@ export function CommentItem({
               comment={child}
               depth={depth + 1}
               maxDepth={maxDepth}
+              subjectId={effectiveSubjectId}
               onReply={onReply}
               onVoteComment={onVoteComment}
+              onDeleteComment={onDeleteComment}
             />
           ))}
         </div>

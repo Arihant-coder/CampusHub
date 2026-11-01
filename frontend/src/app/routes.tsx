@@ -9,6 +9,7 @@ import { communitiesRoute } from "@/features/communities/routes";
 import { projectAnalysisRoute } from "@/features/project-analysis/routes";
 import { resumeReviewerRoute } from "@/features/resume-reviewer/routes";
 import { dailyQuizRoute } from "@/features/daily-quiz/routes";
+import { adminRoute } from "@/features/admin/routes";
 
 export const router = createBrowserRouter([
   ...authRoutes,
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
     children: [
       dashboardRoute,
       communitiesRoute,
+      adminRoute,
       {
         path: "subjects",
         element: <SubjectWorkspaceLayout />,

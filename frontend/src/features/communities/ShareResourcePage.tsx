@@ -35,10 +35,7 @@ import { communitiesService } from "./services";
 import type { ResourceType, ResourceCategory } from "./services/types";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
-import {
-  compressPdf,
-  type CompressionProgress,
-} from "./utils/pdfCompressor";
+import { PdfOptimizerModal } from "./components/PdfOptimizerModal";
 
 export const ShareResourcePage: React.FC = () => {
   const { subjectId } = useParams<{ subjectId: string }>();
@@ -50,10 +47,9 @@ export const ShareResourcePage: React.FC = () => {
   const [category, setCategory] = useState<ResourceCategory>("Day wise");
   const [file, setFile] = useState<File | null>(null);
 
-  // Compression state
+  // Compression & Optimizer state
   const [originalFile, setOriginalFile] = useState<File | null>(null);
-  const [isCompressing, setIsCompressing] = useState(false);
-  const [compressionProgress, setCompressionProgress] = useState<CompressionProgress | null>(null);
+  const [isOptimizerOpen, setIsOptimizerOpen] = useState(false);
   const [compressionStats, setCompressionStats] = useState<{
     originalSize: number;
     compressedSize: number;
@@ -112,44 +108,22 @@ export const ShareResourcePage: React.FC = () => {
     setFile(selected);
     setOriginalFile(selected);
     setCompressionStats(null);
-    setCompressionProgress(null);
     if (!title) {
       setTitle(selected.name.replace(/\.pdf$/i, ""));
     }
   };
 
-  const handleCompress = async () => {
-    if (!file || isCompressing) return;
-
-    try {
-      setIsCompressing(true);
-      setCompressionProgress({ percent: 0, step: "Starting compression..." });
-
-      const result = await compressPdf(
-        file,
-        { maxDimension: 1600, quality: 0.75 },
-        (progress) => setCompressionProgress(progress)
-      );
-
-      if (result.savedBytes > 0) {
-        setFile(result.file);
-        setCompressionStats({
-          originalSize: result.originalBytes,
-          compressedSize: result.compressedBytes,
-        });
-        toast.success(
-          `Compressed from ${formatMB(result.originalBytes)} MB to ${formatMB(result.compressedBytes)} MB!`
-        );
-      } else {
-        toast.info("This document is already well-optimized.");
-      }
-    } catch (err: any) {
-      console.error("Compression error:", err);
-      toast.error(err.message || "Failed to compress PDF.");
-    } finally {
-      setIsCompressing(false);
-      setCompressionProgress(null);
-    }
+  const handleApplyOptimization = (
+    compressedFile: File,
+    stats: { originalSize: number; compressedSize: number }
+  ) => {
+    setFile(compressedFile);
+    setCompressionStats(stats);
+    toast.success(
+      `Optimized from ${formatMB(stats.originalSize)} MB to ${formatMB(stats.compressedSize)} MB (Saved ${Math.round(
+        (1 - stats.compressedSize / stats.originalSize) * 100
+      )}%)!`
+    );
   };
 
   const handleRevert = () => {
@@ -201,11 +175,13 @@ export const ShareResourcePage: React.FC = () => {
       });
 
       if (res.error) {
-        toast.error(res.error.message || "Failed to publish resource.");
+        toast.error(res.error.message || "Failed to submit resource for review.");
         return;
       }
 
-      toast.success("Resource shared with community successfully!");
+      toast.success(
+        "Resource submitted for moderation! An admin or moderator will review and approve it."
+      );
       navigate(`/communities/${subjectId}`);
     } finally {
       setIsSubmitting(false);
@@ -229,11 +205,12 @@ export const ShareResourcePage: React.FC = () => {
 
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Share Community Resource
+          Submit Resource for Moderation
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Contribute study material, lecture notes, or previous year exam papers to help your peers in{" "}
-          <span className="font-semibold text-foreground">{subjectName}</span>.
+          Contribute study material or past exams to address note scarcity in{" "}
+          <span className="font-semibold text-foreground">{subjectName}</span>. Submissions are reviewed by
+          moderators before being added to the shared archive.
         </p>
       </div>
 
@@ -391,18 +368,30 @@ export const ShareResourcePage: React.FC = () => {
                 />
               </label>
 
-              {/* On-Demand PDF Compressor Banner */}
+              {/* On-Demand PDF Compressor Banner with Customizable Viewer */}
               {file && (
-                <div className="rounded-lg border p-3 bg-card/60 space-y-2 text-xs">
+                <div className="rounded-lg border p-3 bg-card/60 space-y-2.5 text-xs">
                   {isFileOverLimit ? (
-                    <div className="flex items-center gap-2 text-destructive font-medium">
-                      <AlertTriangle className="h-4 w-4 shrink-0" />
-                      <span>
-                        File is {(file.size / (1024 * 1024)).toFixed(2)} MB, which exceeds the 5 MB limit.
-                      </span>
+                    <div className="flex items-center justify-between gap-2 text-destructive font-medium flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>
+                          File is {(file.size / (1024 * 1024)).toFixed(2)} MB, which exceeds the 5 MB limit.
+                        </span>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setIsOptimizerOpen(true)}
+                        className="h-7 text-xs gap-1.5 font-semibold cursor-pointer shrink-0"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span>Compress & Preview</span>
+                      </Button>
                     </div>
                   ) : compressionStats ? (
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
                       <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5">
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
                         Optimized: {(compressionStats.originalSize / (1024 * 1024)).toFixed(2)} MB →{" "}
@@ -412,58 +401,45 @@ export const ShareResourcePage: React.FC = () => {
                         )}
                         %)
                       </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleRevert}
-                        className="h-6 text-[11px] gap-1 px-2 text-muted-foreground hover:text-foreground"
-                      >
-                        <RotateCcw className="h-3 w-3" />
-                        Revert
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setIsOptimizerOpen(true)}
+                          className="h-6 text-[11px] gap-1 px-2 cursor-pointer"
+                        >
+                          <Sparkles className="h-3 w-3 text-amber-500" />
+                          Adjust / Re-optimize
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRevert}
+                          className="h-6 text-[11px] gap-1 px-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                          Revert
+                        </Button>
+                      </div>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between gap-2 text-muted-foreground">
-                      <span>
-                        File size: {(file.size / (1024 * 1024)).toFixed(2)} MB. Compress to save community quota.
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="text-muted-foreground">
+                        File size: {(file.size / (1024 * 1024)).toFixed(2)} MB. Optimize document to save quota.
                       </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsOptimizerOpen(true)}
+                        className="h-7 text-xs gap-1.5 font-medium cursor-pointer"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                        <span>Optimize PDF (Preview & Compress)</span>
+                      </Button>
                     </div>
-                  )}
-
-                  {/* Progress Indicator */}
-                  {isCompressing && compressionProgress && (
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1.5 text-foreground font-medium">
-                          <Loader2 className="h-3 w-3 animate-spin text-primary" />
-                          {compressionProgress.step}
-                        </span>
-                        <span>{compressionProgress.percent}%</span>
-                      </div>
-                      <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-primary h-full transition-all rounded-full"
-                          style={{ width: `${compressionProgress.percent}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Compress Button */}
-                  {!compressionStats && !isCompressing && (
-                    <Button
-                      type="button"
-                      variant={isFileOverLimit ? "default" : "outline"}
-                      size="sm"
-                      onClick={handleCompress}
-                      className="w-full h-7 text-xs gap-1.5 font-medium cursor-pointer"
-                    >
-                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                      <span>
-                        {isFileOverLimit ? "Compress to fit 5 MB limit" : "Compress Document (On-Demand)"}
-                      </span>
-                    </Button>
                   )}
                 </div>
               )}
@@ -474,7 +450,7 @@ export const ShareResourcePage: React.FC = () => {
                 type="button"
                 variant="outline"
                 onClick={() => navigate(`/communities/${subjectId || ""}`)}
-                disabled={isSubmitting || isCompressing}
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
@@ -482,7 +458,6 @@ export const ShareResourcePage: React.FC = () => {
                 type="submit"
                 disabled={
                   isSubmitting ||
-                  isCompressing ||
                   !title.trim() ||
                   !file ||
                   isFileOverLimit ||
@@ -493,16 +468,24 @@ export const ShareResourcePage: React.FC = () => {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Publishing...
+                    Submitting...
                   </>
                 ) : (
-                  "Publish to Community"
+                  "Submit for Moderation"
                 )}
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
+
+      {/* Interactive PDF Optimizer & Customizable Viewer Modal */}
+      <PdfOptimizerModal
+        isOpen={isOptimizerOpen}
+        file={originalFile || file}
+        onClose={() => setIsOptimizerOpen(false)}
+        onApply={handleApplyOptimization}
+      />
     </div>
   );
 };

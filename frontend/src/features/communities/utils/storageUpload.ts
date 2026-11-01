@@ -24,14 +24,17 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 
 /**
  * Uploads an image (Blob, File, or dataUrl string) to the communities-images bucket.
+ * Stored under path: {subjectId}/{userId}/{uuid}.webp
  * Returns the public CDN URL.
  */
 export async function uploadCommunityImage(
   imageSource: Blob | File | string,
-  userId: string
+  userId: string,
+  subjectId: string
 ): Promise<string> {
   const blob = typeof imageSource === "string" ? dataUrlToBlob(imageSource) : imageSource;
-  const fileName = `${userId}/${crypto.randomUUID()}.webp`;
+  const cleanSubjectId = subjectId || "general";
+  const fileName = `${cleanSubjectId}/${userId}/${crypto.randomUUID()}.webp`;
 
   const { error: uploadError } = await supabase.storage
     .from("communities-images")

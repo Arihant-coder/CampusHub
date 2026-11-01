@@ -50,7 +50,7 @@ CREATE POLICY "Users or staff can delete notes"
   ON public.notes FOR DELETE
   TO authenticated
   USING (
-    user_id = auth.uid() OR public.is_staff()
+    user_id = auth.uid() OR (select public.is_staff_for(subject_id))
   );
 
 -- Guard notes updates: freeze immutable identifiers, storage path, and file size
@@ -192,7 +192,34 @@ CREATE POLICY "Users or staff can delete notes in subject-notes"
   USING (
     bucket_id = 'subject-notes' AND (
       (auth.uid()::text = (storage.foldername(name))[1])
-      OR public.is_staff()
+      OR EXISTS (
+        SELECT 1 FROM public.notes n
+        WHERE n.storage_path = storage.objects.name
+          AND (select public.is_staff_for(n.subject_id))
+      )
     )
   );
+
+-- Audit trigger: Staff deletion of notes creates moderation_log row
+CREATE OR REPLACE FUNCTION public.log_note_delete()
+RETURNS trigger AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() <> OLD.user_id AND (select public.is_staff_for(OLD.subject_id)) THEN
+    INSERT INTO public.moderation_log (subject_id, actor, target, action, details)
+    VALUES (
+      OLD.subject_id,
+      auth.uid(),
+      OLD.id::text,
+      'delete_note',
+      jsonb_build_object('title', OLD.title, 'owner_id', OLD.user_id)
+    );
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_log_note_delete ON public.notes;
+CREATE TRIGGER trg_log_note_delete
+  BEFORE DELETE ON public.notes
+  FOR EACH ROW EXECUTE FUNCTION public.log_note_delete();
 

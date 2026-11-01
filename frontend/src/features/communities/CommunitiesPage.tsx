@@ -5,13 +5,14 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { useParams, useOutletContext } from "react-router-dom";
+import { useOutletContext } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CommunityHeader } from "./components/CommunityHeader";
 import { PostFeed } from "./components/PostFeed";
 import { ResourceArchive } from "./components/ResourceArchive";
 import { communitiesService } from "./services";
 import { useDebounce } from "@/lib/use-debounce";
+import { toast } from "sonner";
 import type { CommunitiesContextType } from "./CommunitiesLayout";
 import type {
   Post,
@@ -21,7 +22,6 @@ import type {
 } from "./services/types";
 
 export default function CommunitiesPage() {
-  const { subjectId } = useParams<{ subjectId?: string }>();
   const context = useOutletContext<CommunitiesContextType | undefined>();
 
   const activeForum = context?.activeForum || null;
@@ -120,7 +120,7 @@ export default function CommunitiesPage() {
     }
   };
 
-  // Upload Resource Handler
+  // Upload Resource Handler (Queues note for moderator/admin review)
   const handleUploadResource = async (data: {
     title: string;
     type: ResourceType;
@@ -138,11 +138,11 @@ export default function CommunitiesPage() {
       file: data.file,
     });
     if (res.data) {
-      if (res.data.type === "Note") {
-        setNotes((prev) => [res.data, ...prev]);
-      } else {
-        setPyqs((prev) => [res.data, ...prev]);
-      }
+      toast.success(
+        "Resource submitted for review! An admin or moderator will verify it before it appears in public notes."
+      );
+    } else if (res.error) {
+      toast.error(res.error.message || "Failed to submit resource for review.");
     }
   };
 

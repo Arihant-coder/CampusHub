@@ -57,7 +57,7 @@ frontend/src/
 └── features/                   # 🎯 1 Folder = 1 Developer Ownership
     ├── auth/                   # Login, signup, role selector & avatar management
     ├── dashboard/              # Dashboard overview (components/, services/, routes.tsx, DashboardPage.tsx)
-    ├── communities/            # Forum & resource archive (components/, services/, routes.tsx, CommunitiesPage.tsx)
+    ├── communities/            # Forum, resource archive, local PDF optimizer, & moderation queue
     ├── subject-viewer/         # Notes tree & document viewer (components/, services/, routes.tsx, SubjectViewerPage.tsx)
     ├── subject-ai-panel/       # AI companion panel (components/, services/, routes.tsx, SubjectAiPanelPage.tsx)
     ├── project-analysis/       # GitHub repo audit tool (components/, services/, routes.tsx, ProjectAnalysisPage.tsx)

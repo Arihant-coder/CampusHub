@@ -51,8 +51,12 @@ RETURNS trigger AS $$
 DECLARE
   v_clean text;
 BEGIN
-  -- When invoked by an authenticated client session, disallow role and id self-escalation
-  IF auth.uid() IS NOT NULL THEN
+  -- When invoked via trusted admin RPC, allow role modification
+  IF current_setting('app.trusted_role_update', true) = '1' THEN
+    NEW.id         := OLD.id;
+    NEW.created_at := OLD.created_at;
+  ELSIF auth.uid() IS NOT NULL THEN
+    -- Client session: disallow role and id self-escalation
     NEW.id         := OLD.id;
     NEW.role       := OLD.role;
     NEW.created_at := OLD.created_at;

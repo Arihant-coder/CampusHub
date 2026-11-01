@@ -17,6 +17,7 @@ import {
   Moon,
   LogOut,
   Camera,
+  ShieldCheck,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -223,6 +224,24 @@ function RootLayoutContent() {
                 <span>Communities</span>
               </NavLink>
 
+              {/* Admin Panel (Admin Only) */}
+              {user?.role === "admin" && (
+                <NavLink
+                  to="/admin/moderators"
+                  onClick={closeSidebarOnMobile}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-secondary font-semibold text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`
+                  }
+                >
+                  <ShieldCheck className="h-4 w-4 shrink-0 text-destructive" />
+                  <span>Moderator Admin</span>
+                </NavLink>
+              )}
+
               {/* Student Tools */}
               <div className="pt-1">
                 <button
@@ -427,10 +446,22 @@ function RootLayoutContent() {
                         {user?.fullName || "Student User"}
                       </p>
                       <Badge
-                        variant={user?.role === "admin" ? "destructive" : user?.role === "moderator" ? "default" : "secondary"}
+                        variant={
+                          user?.role === "admin"
+                            ? "destructive"
+                            : user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0
+                            ? "default"
+                            : "secondary"
+                        }
                         className="text-[10px] capitalize px-1.5 py-0"
                       >
-                        {user?.role || "student"}
+                        {user?.role === "admin"
+                          ? "admin"
+                          : user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0
+                          ? `Moderator · ${user.moderatedSubjectIds.length} ${
+                              user.moderatedSubjectIds.length === 1 ? "community" : "communities"
+                            }`
+                          : "student"}
                       </Badge>
                     </div>
                     <p className="text-xs leading-none text-muted-foreground">
@@ -439,6 +470,25 @@ function RootLayoutContent() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {user?.role === "admin" && (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => navigate("/admin/moderators")}
+                  >
+                    <ShieldCheck className="mr-2 h-4 w-4 text-destructive" />
+                    <span>Moderator Admin</span>
+                  </DropdownMenuItem>
+                )}
+                {(user?.role === "admin" ||
+                  (user?.moderatedSubjectIds && user.moderatedSubjectIds.length > 0)) && (
+                  <DropdownMenuItem
+                    className="cursor-pointer"
+                    onClick={() => navigate("/communities/moderation")}
+                  >
+                    <ShieldCheck className="mr-2 h-4 w-4 text-primary" />
+                    <span>Resource Moderation</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   className="cursor-pointer"
                   onClick={() => setIsAvatarDialogOpen(true)}

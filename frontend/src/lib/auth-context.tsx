@@ -16,6 +16,7 @@ interface AuthContextType {
   setAuthUser: (profile: UserProfile | null) => void;
   updateUserAvatar: (avatarUrl: string) => void;
   logout: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -125,6 +126,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser((prev) => (prev ? { ...prev, avatarUrl } : null));
   };
 
+  const refreshProfile = async () => {
+    if (isMock) {
+      const mockUser = authService.getMockUser();
+      if (mockUser) {
+        setUser({ ...mockUser });
+      }
+    } else {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const profile = await authService.getLiveProfile(session.user.id);
+        if (profile) setUser(profile);
+      }
+    }
+  };
+
   const logout = async () => {
     sessionStorage.setItem("campushub:signed_out", "true");
     if (isMock) {
@@ -144,6 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAuthUser,
         updateUserAvatar,
         logout,
+        refreshProfile,
       }}
     >
       {children}

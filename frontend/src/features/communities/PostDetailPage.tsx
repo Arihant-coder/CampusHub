@@ -16,8 +16,10 @@ import {
   Loader2,
   Image as ImageIcon,
   X,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ImageCarousel } from "./components/ImageCarousel";
@@ -27,16 +29,59 @@ import { CommentTree } from "./components/CommentTree";
 import { toast } from "sonner";
 import { communitiesService } from "./services";
 import { processCommunityImage } from "./utils/imagePipeline";
+import { useAuth } from "@/lib/auth-context";
+import { canModerate } from "@/shared/user";
 import type { Post, Comment, SubjectForum } from "./services/types";
 
 export default function PostDetailPage() {
   const { subjectId, postId } = useParams<{ subjectId?: string; postId?: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [post, setPost] = useState<Post | null>(null);
   const [forum, setForum] = useState<SubjectForum | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const canDeletePost = Boolean(
+    user && post && (user.id === post.authorId || canModerate(user, post.subjectId))
+  );
+
+  const handleDeletePost = async () => {
+    if (!post || !window.confirm(`Are you sure you want to delete "${post.title}"?`)) return;
+    try {
+      if (communitiesService.deletePost) {
+        await communitiesService.deletePost(post.id, post.images);
+      }
+      toast.success("Post deleted.");
+      navigate(`/communities/${post.subjectId}`);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete post.");
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+    try {
+      if (communitiesService.deleteComment) {
+        await communitiesService.deleteComment(commentId);
+      }
+      setComments((prev) => {
+        const removeRecursive = (list: Comment[]): Comment[] => {
+          return list
+            .filter((c) => c.id !== commentId)
+            .map((c) => ({
+              ...c,
+              children: c.children ? removeRecursive(c.children) : [],
+            }));
+        };
+        return removeRecursive(prev);
+      });
+      toast.success("Comment deleted.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete comment.");
+    }
+  };
 
   // Top-level comment box state
   const [commentText, setCommentText] = useState("");
@@ -275,15 +320,34 @@ export default function PostDetailPage() {
                   </button>
                   <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate">
                     <span className="font-medium text-foreground/80">{post.authorHandle}</span>
+                    {canModerate(user, post.subjectId) && (
+                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/40 text-primary">
+                        Moderator
+                      </Badge>
+                    )}
                     <span>•</span>
                     <span>{formatTime(post.createdAt)}</span>
                   </div>
                 </div>
               </div>
 
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1.5">
+                {canDeletePost && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeletePost}
+                    className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 gap-1.5 cursor-pointer"
+                    title="Delete post"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="hidden sm:inline">Delete</span>
+                  </Button>
+                )}
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             {/* Title (Prominent, leading directly to media/content) */}
@@ -457,8 +521,10 @@ export default function PostDetailPage() {
               </h3>
               <CommentTree
                 comments={comments}
+                subjectId={post.subjectId}
                 onReply={handleReplyToComment}
                 onVoteComment={handleVoteComment}
+                onDeleteComment={handleDeleteComment}
               />
             </div>
           </article>

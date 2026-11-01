@@ -5,13 +5,14 @@
  */
 
 import React, { useState } from "react";
-import { FileText, Download, ExternalLink, Calendar, BookOpen, Loader2, Trash2 } from "lucide-react";
+import { FileText, Download, BookOpen, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ResourceNote } from "../services/types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
+import { canModerate } from "@/shared/user";
 
 interface ResourceTableProps {
   resources: ResourceNote[];
@@ -101,10 +102,11 @@ export function ResourceTable({
   return (
     <div className="rounded-xl border bg-card divide-y overflow-hidden shadow-xs">
       {resources.map((item) => {
+        const isOwner = Boolean(user && item.userId && user.id === item.userId);
         const canDelete =
-          onDeleteResource &&
-          user &&
-          (user.handle === item.uploaderHandle || user.role === "moderator" || user.role === "admin");
+          Boolean(onDeleteResource) &&
+          Boolean(user) &&
+          (isOwner || canModerate(user, item.subjectId));
 
         return (
           <div

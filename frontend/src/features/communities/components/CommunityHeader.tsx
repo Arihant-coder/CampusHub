@@ -4,15 +4,34 @@
  * @owner Communities Team
  */
 
-import React from "react";
-import { Users, Share2, Network } from "lucide-react";
-import type { SubjectForum } from "../services/types";
+import React, { useEffect, useState } from "react";
+import { Users, Network, ShieldCheck } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { communitiesService } from "../services";
+import type { SubjectForum, CommunityModerator } from "../services/types";
 
 interface CommunityHeaderProps {
   forum: SubjectForum;
 }
 
 export function CommunityHeader({ forum }: CommunityHeaderProps) {
+  const [moderators, setModerators] = useState<CommunityModerator[]>([]);
+
+  useEffect(() => {
+    if (!forum.id) return;
+    let isMounted = true;
+    if (communitiesService.getCommunityModerators) {
+      communitiesService.getCommunityModerators(forum.id).then((res) => {
+        if (isMounted && res.data) {
+          setModerators(res.data);
+        }
+      });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [forum.id]);
+
   // Format member count into k format, e.g. 1.2k
   const formattedCount =
     forum.memberCount >= 1000
@@ -45,18 +64,39 @@ export function CommunityHeader({ forum }: CommunityHeaderProps) {
           <Network className="h-9 w-9 sm:h-11 sm:w-11 stroke-[1.5]" />
         </div>
 
-        {/* Title & Stats */}
-        <div className="pt-2 sm:pt-4 space-y-1 min-w-0 flex-1">
+        {/* Title, Stats & Moderators */}
+        <div className="pt-2 sm:pt-4 space-y-1.5 min-w-0 flex-1">
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground truncate">
             {forum.name}
           </h2>
-          <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground font-medium">
+          <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground font-medium flex-wrap">
             <span className="flex items-center gap-1.5">
               <Users className="h-3.5 w-3.5" />
               {formattedCount} users
             </span>
             <span>•</span>
             <span className="font-mono text-xs">{forum.code}</span>
+          </div>
+
+          {/* Moderators list in each community header */}
+          <div className="flex items-center gap-2 pt-1 flex-wrap text-xs">
+            <div className="flex items-center gap-1 text-muted-foreground font-medium">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+              <span>Moderators:</span>
+            </div>
+            {moderators.length > 0 ? (
+              moderators.map((m) => (
+                <Badge
+                  key={m.userId}
+                  variant="outline"
+                  className="text-[11px] font-normal py-0 px-1.5 border-border/70"
+                >
+                  @{m.handle}
+                </Badge>
+              ))
+            ) : (
+              <span className="text-muted-foreground italic text-[11px]">None assigned</span>
+            )}
           </div>
         </div>
       </div>

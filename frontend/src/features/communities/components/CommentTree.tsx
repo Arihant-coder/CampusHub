@@ -11,14 +11,18 @@ import type { Comment } from "../services/types";
 
 interface CommentTreeProps {
   comments: Comment[];
+  subjectId?: string;
   onReply: (parentId: string, body: string, images?: string[]) => Promise<void>;
   onVoteComment?: (commentId: string, vote: 1 | -1 | null) => Promise<void>;
+  onDeleteComment?: (commentId: string) => Promise<void>;
 }
 
 export function CommentTree({
   comments,
+  subjectId,
   onReply,
   onVoteComment,
+  onDeleteComment,
 }: CommentTreeProps) {
   // Build nested hierarchical tree from flat comment list
   const commentTree = useMemo(() => {
@@ -63,8 +67,10 @@ export function CommentTree({
           comment={rootComment}
           depth={0}
           maxDepth={12}
+          subjectId={subjectId}
           onReply={onReply}
           onVoteComment={onVoteComment}
+          onDeleteComment={onDeleteComment}
         />
       ))}
     </div>

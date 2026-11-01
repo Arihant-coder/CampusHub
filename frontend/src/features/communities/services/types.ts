@@ -6,6 +6,7 @@
 
 import type { Result } from "@/shared/result";
 import type { Post } from "@/shared/communities";
+import type { UserRole } from "@/shared/user";
 
 export type { Post };
 
@@ -25,6 +26,7 @@ export interface SubjectForum {
 export interface Comment {
   id: string;
   postId: string;
+  subjectId?: string;
   parentId?: string | null;
   depth?: number;
   authorId: string;
@@ -42,6 +44,7 @@ export interface Comment {
 export interface ResourceNote {
   id: string;
   subjectId: string;
+  userId?: string;
   title: string;
   type: ResourceType; // "Note" | "PYQ"
   category: ResourceCategory; // "Day wise" | "Unit wise" | "Other"
@@ -50,6 +53,38 @@ export interface ResourceNote {
   fileSizeBytes?: number;
   storagePath: string;
   createdAt: string;
+  status?: "pending" | "approved" | "rejected";
+  isShared?: boolean;
+}
+
+export interface CommunityModerator {
+  subjectId: string;
+  userId: string;
+  assignedBy?: string | null;
+  createdAt: string;
+  handle?: string;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+}
+
+export interface ProfileSearchResult {
+  id: string;
+  handle: string;
+  fullName: string | null;
+}
+
+export interface Report {
+  id: string;
+  subjectId: string;
+  reporterId: string;
+  targetType: "post" | "comment" | "note" | "user";
+  targetId: string;
+  reason: string;
+  status: "pending" | "resolved" | "dismissed";
+  resolvedBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reporterHandle?: string;
 }
 
 export interface GlobalSearchResult {
@@ -79,6 +114,9 @@ export interface CommunitiesService {
   ): Promise<Result<Comment>>;
   voteComment?(commentId: string, voteValue: 1 | -1 | null): Promise<Result<{ upvotes: number; downvotes: number; currentUserVote: 1 | -1 | null }>>;
   getResources(subjectId: string, type: ResourceType): Promise<Result<ResourceNote[]>>;
+  getPendingResources?(subjectId?: string): Promise<Result<ResourceNote[]>>;
+  approveResource?(resourceId: string, category?: ResourceCategory): Promise<Result<ResourceNote>>;
+  rejectResource?(resourceId: string, reason?: string): Promise<Result<boolean>>;
   uploadResource(data: {
     subjectId: string;
     title: string;
@@ -90,4 +128,11 @@ export interface CommunitiesService {
   deleteResource?(resourceId: string, storagePath: string): Promise<Result<boolean>>;
   deletePost?(postId: string, imagePaths?: string[]): Promise<Result<boolean>>;
   deleteComment?(commentId: string, imagePaths?: string[]): Promise<Result<boolean>>;
+  getCommunityModerators?(subjectId: string): Promise<Result<CommunityModerator[]>>;
+  assignModerator?(subjectId: string, userId: string): Promise<Result<void>>;
+  removeModerator?(subjectId: string, userId: string): Promise<Result<void>>;
+  searchProfilesForAdmin?(query: string): Promise<Result<ProfileSearchResult[]>>;
+  setUserRole?(userId: string, role: UserRole): Promise<Result<void>>;
+  getReports?(subjectId?: string): Promise<Result<Report[]>>;
+  resolveReport?(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>>;
 }

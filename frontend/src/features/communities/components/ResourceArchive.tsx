@@ -6,7 +6,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Filter, ArrowUpDown } from "lucide-react";
+import { Search, Plus, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,6 +18,8 @@ import {
 import { ResourceTable } from "./ResourceTable";
 import { UploadModal } from "./UploadModal";
 import type { ResourceNote, ResourceType, ResourceCategory } from "../services/types";
+import { useAuth } from "@/lib/auth-context";
+import { canModerate } from "@/shared/user";
 
 interface ResourceArchiveProps {
   subjectId?: string;
@@ -45,6 +47,8 @@ export function ResourceArchive({
   onUploadResource,
 }: ResourceArchiveProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const isStaff = canModerate(user, subjectId);
   const [subTab, setSubTab] = useState<"Notes" | "PYQs">("Notes");
   const [isUploadOpen, setIsUploadOpen] = useState(false);
 
@@ -132,21 +136,37 @@ export function ResourceArchive({
           </button>
         </div>
 
-        {/* Action Button: Share Resource */}
-        <Button
-          size="sm"
-          onClick={() => {
-            if (subjectId) {
-              navigate(`/communities/${subjectId}/share`);
-            } else {
-              setIsUploadOpen(true);
-            }
-          }}
-          className="h-8 gap-1.5 text-xs font-semibold shadow-xs"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          <span>{subTab === "Notes" ? "Share Notes" : "Share PYQ"}</span>
-        </Button>
+        {/* Action Buttons: Review Queue (Staff only) + Share Resource */}
+        <div className="flex items-center gap-2">
+          {isStaff && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                navigate(subjectId ? `/communities/${subjectId}/moderation` : "/communities/moderation")
+              }
+              className="h-8 gap-1.5 text-xs font-semibold border-primary/30 text-primary hover:bg-primary/10 shadow-xs cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" />
+              <span>Review Queue</span>
+            </Button>
+          )}
+
+          <Button
+            size="sm"
+            onClick={() => {
+              if (subjectId) {
+                navigate(`/communities/${subjectId}/share`);
+              } else {
+                setIsUploadOpen(true);
+              }
+            }}
+            className="h-8 gap-1.5 text-xs font-semibold shadow-xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>{subTab === "Notes" ? "Share Notes" : "Share PYQ"}</span>
+          </Button>
+        </div>
       </div>
 
       {/* Filter and Search Bar matching wireframe 2 & 3 */}

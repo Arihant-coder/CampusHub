@@ -110,3 +110,14 @@ coverage/
 .antigravity/
 .cursor/
 .agents/
+.system_generated/
+scratch/
+AGENTS.md
+
+# ==============================================================================
+# Vite & Bundler Temporaries
+# ==============================================================================
+*.timestamp-*
+*.tsbuildinfo
+vite.config.ts.timestamp-*
+

@@ -41,7 +41,30 @@ CREATE POLICY "Authors can update their own posts"
 CREATE POLICY "Authors or staff can delete posts"
   ON public.posts FOR DELETE
   TO authenticated
-  USING (auth.uid() = author_id OR public.is_staff());
+  USING (auth.uid() = author_id OR (select public.is_staff_for(subject_id)));
+
+-- Audit trigger: Staff deletion of posts creates moderation_log row
+CREATE OR REPLACE FUNCTION public.log_post_delete()
+RETURNS trigger AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() <> OLD.author_id AND (select public.is_staff_for(OLD.subject_id)) THEN
+    INSERT INTO public.moderation_log (subject_id, actor, target, action, details)
+    VALUES (
+      OLD.subject_id,
+      auth.uid(),
+      OLD.id::text,
+      'delete_post',
+      jsonb_build_object('title', OLD.title, 'author_id', OLD.author_id)
+    );
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_log_post_delete ON public.posts;
+CREATE TRIGGER trg_log_post_delete
+  BEFORE DELETE ON public.posts
+  FOR EACH ROW EXECUTE FUNCTION public.log_post_delete();
 
 -- Guard post updates: freeze counters unless modified by trusted RPC/triggers
 CREATE OR REPLACE FUNCTION public.guard_post_update()
@@ -123,6 +146,7 @@ $$;
 CREATE TABLE IF NOT EXISTS public.comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id UUID NOT NULL REFERENCES public.posts(id) ON DELETE CASCADE,
+    subject_id TEXT NOT NULL REFERENCES public.subjects(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES public.comments(id) ON DELETE CASCADE,
     depth INT NOT NULL DEFAULT 0 CHECK (depth >= 0 AND depth <= 11),
     author_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -134,6 +158,7 @@ CREATE TABLE IF NOT EXISTS public.comments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments (post_id);
+CREATE INDEX IF NOT EXISTS idx_comments_subject_id ON public.comments (subject_id);
 CREATE INDEX IF NOT EXISTS idx_comments_author ON public.comments (author_id);
 
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
@@ -157,15 +182,50 @@ CREATE POLICY "Authors can update their own comments"
 CREATE POLICY "Authors or staff can delete comments"
   ON public.comments FOR DELETE
   TO authenticated
-  USING (auth.uid() = author_id OR public.is_staff());
+  USING (auth.uid() = author_id OR (select public.is_staff_for(subject_id)));
 
--- Enforce comment nesting depth limit (12 levels: 0 to 11) and prevent cross-post hijacking
+-- Audit trigger: Staff deletion of comments creates moderation_log row
+CREATE OR REPLACE FUNCTION public.log_comment_delete()
+RETURNS trigger AS $$
+BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() <> OLD.author_id AND (select public.is_staff_for(OLD.subject_id)) THEN
+    INSERT INTO public.moderation_log (subject_id, actor, target, action, details)
+    VALUES (
+      OLD.subject_id,
+      auth.uid(),
+      OLD.id::text,
+      'delete_comment',
+      jsonb_build_object('post_id', OLD.post_id, 'author_id', OLD.author_id)
+    );
+  END IF;
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+DROP TRIGGER IF EXISTS trg_log_comment_delete ON public.comments;
+CREATE TRIGGER trg_log_comment_delete
+  BEFORE DELETE ON public.comments
+  FOR EACH ROW EXECUTE FUNCTION public.log_comment_delete();
+
+-- Enforce comment nesting depth limit (12 levels: 0 to 11), populate subject_id, and prevent cross-post hijacking
 CREATE OR REPLACE FUNCTION public.handle_comment_depth_and_safety()
 RETURNS trigger AS $$
 DECLARE
   v_parent_depth INT;
   v_parent_post_id UUID;
+  v_post_subject_id TEXT;
 BEGIN
+  -- Always populate subject_id directly from the parent post
+  SELECT subject_id INTO v_post_subject_id
+  FROM public.posts
+  WHERE id = NEW.post_id;
+
+  IF v_post_subject_id IS NULL THEN
+    RAISE EXCEPTION 'Parent post not found or invalid subject_id';
+  END IF;
+
+  NEW.subject_id := v_post_subject_id;
+
   IF NEW.parent_id IS NULL THEN
     NEW.depth := 0;
   ELSE
@@ -216,7 +276,7 @@ CREATE TRIGGER trg_comment_count
   AFTER INSERT OR DELETE ON public.comments
   FOR EACH ROW EXECUTE FUNCTION public.handle_comment_count();
 
--- Guard comment updates: freeze counters and nesting fields
+-- Guard comment updates: freeze counters, subject_id, and nesting fields
 CREATE OR REPLACE FUNCTION public.guard_comment_update()
 RETURNS trigger AS $$
 BEGIN
@@ -227,6 +287,7 @@ BEGIN
   NEW.upvotes    := OLD.upvotes;
   NEW.downvotes  := OLD.downvotes;
   NEW.author_id  := OLD.author_id;
+  NEW.subject_id := OLD.subject_id;
   NEW.post_id    := OLD.post_id;
   NEW.parent_id  := OLD.parent_id;
   NEW.depth      := OLD.depth;
@@ -309,6 +370,7 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = ARRAY['image/webp'];
 
 -- Per-user storage cap for communities-images (25 MB max per user)
+-- Path format: {subject_id}/{uid}/{uuid}.webp
 CREATE OR REPLACE FUNCTION public.check_community_images_quota(p_owner uuid, p_new_size bigint)
 RETURNS boolean
 LANGUAGE plpgsql
@@ -321,7 +383,7 @@ DECLARE
 BEGIN
   SELECT COALESCE(SUM((metadata->>'size')::bigint), 0) INTO v_user_used
   FROM storage.objects
-  WHERE bucket_id = 'communities-images' AND (storage.foldername(name))[1] = p_owner::text;
+  WHERE bucket_id = 'communities-images' AND (storage.foldername(name))[2] = p_owner::text;
 
   IF (v_user_used + COALESCE(p_new_size, 0)) > c_user_limit THEN
     RETURN false;
@@ -340,7 +402,7 @@ CREATE POLICY "Users can upload WebP images to communities-images with quota"
   TO authenticated
   WITH CHECK (
     bucket_id = 'communities-images' AND
-    (auth.uid()::text = (storage.foldername(name))[1]) AND
+    ((storage.foldername(name))[2] = auth.uid()::text) AND
     (
       (metadata->>'size') IS NULL OR
       public.check_community_images_quota(auth.uid(), (metadata->>'size')::bigint)
@@ -352,8 +414,8 @@ CREATE POLICY "Users or staff can delete images in communities-images"
   TO authenticated
   USING (
     bucket_id = 'communities-images' AND (
-      (auth.uid()::text = (storage.foldername(name))[1])
-      OR public.is_staff()
+      ((storage.foldername(name))[2] = auth.uid()::text)
+      OR (select public.is_staff_for((storage.foldername(name))[1]))
     )
   );
 
