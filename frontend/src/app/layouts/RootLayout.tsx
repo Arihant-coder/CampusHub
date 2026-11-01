@@ -110,7 +110,7 @@ function getPageTitle(pathname: string): string {
 }
 
 function RootLayoutContent() {
-  const [isSidebarOpen, setIsSidebarOpen] = usePersistentToggle("campushub:sidebar:main", true);
+  const [isSidebarOpen, setIsSidebarOpen] = usePersistentToggle("campushub:sidebar:main", false);
   const [isStudentToolsOpen, setIsStudentToolsOpen] = usePersistentToggle("campushub:sidebar:student-tools", true);
   const [isSubjectsOpen, setIsSubjectsOpen] = usePersistentToggle("campushub:sidebar:subjects", true);
   const [isAvatarDialogOpen, setIsAvatarDialogOpen] = useState(false);
