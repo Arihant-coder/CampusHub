@@ -86,7 +86,7 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
   },
 ];
 
-const INITIAL_POSTS: Post[] = [
+const INITIAL_POSTS: any[] = [
   {
     id: "p1",
     subjectId: "cs301",
@@ -257,7 +257,7 @@ const INITIAL_POSTS: Post[] = [
   },
 ];
 
-const INITIAL_COMMENTS: Comment[] = [
+const INITIAL_COMMENTS: any[] = [
   // Top-level comment for post p1 (Level 1, depth 0)
   {
     id: "c1",
@@ -469,7 +469,7 @@ const INITIAL_COMMENTS: Comment[] = [
   },
 ];
 
-const INITIAL_RESOURCES: ResourceNote[] = [
+const INITIAL_RESOURCES: any[] = [
   {
     id: "n1",
     subjectId: "cs301",
@@ -592,32 +592,34 @@ let mockReports: Report[] = [
     subjectId: "cs301",
     reporterId: "mock-student-uuid",
     targetType: "post",
-    targetId: "post-1",
+    targetId: "p1",
     reason: "Off-topic content and spam links in comment section.",
     status: "pending",
     createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    reporterName: "Alex Chen",
     reporterHandle: "alex_chen",
   },
   {
     id: "rep-2",
-    subjectId: "cs302",
+    subjectId: "cs301",
     reporterId: "mock-student-uuid",
     targetType: "comment",
-    targetId: "c-101",
+    targetId: "c1-2",
     reason: "Inappropriate language towards peers.",
     status: "pending",
     createdAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
     updatedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
+    reporterName: "Alex Chen",
     reporterHandle: "alex_chen",
   },
 ];
 
 // In-memory state
 let subjectForums = [...INITIAL_SUBJECT_FORUMS];
-let posts = [...INITIAL_POSTS];
-let comments = [...INITIAL_COMMENTS];
-let resources = [...INITIAL_RESOURCES];
+let posts: Post[] = INITIAL_POSTS.map((p) => ({ ...p, authorName: p.authorName || p.authorHandle || "Anonymous" }));
+let comments: Comment[] = INITIAL_COMMENTS.map((c) => ({ ...c, authorName: c.authorName || c.authorHandle || "Anonymous" }));
+let resources: ResourceNote[] = INITIAL_RESOURCES.map((r) => ({ ...r, uploaderName: r.uploaderName || r.uploaderHandle || "Anonymous" }));
 
 export const mockCommunitiesService: CommunitiesService = {
   async getSubjectForums(): Promise<Result<SubjectForum[]>> {
@@ -742,6 +744,7 @@ export const mockCommunitiesService: CommunitiesService = {
       id: `p-${Date.now()}`,
       subjectId: data.subjectId,
       authorId: "mock-student",
+      authorName: "Alex Chen",
       authorHandle: "Hashpotato",
       authorAvatarUrl: null,
       title: trimmedTitle,
@@ -879,6 +882,7 @@ export const mockCommunitiesService: CommunitiesService = {
       parentId: parentId || null,
       depth: calculatedDepth,
       authorId: "mock-student",
+      authorName: "Alex Chen",
       authorHandle: "Hashpotato",
       authorAvatarUrl: null,
       body: trimmedBody,
@@ -993,6 +997,7 @@ export const mockCommunitiesService: CommunitiesService = {
       title: data.title,
       type: data.type,
       category: data.category || "Other",
+      uploaderName: "Alex Chen",
       uploaderHandle: "Hashpotato",
       pageCount: data.pageCount || (Math.floor(Math.random() * 20) + 2),
       fileSizeBytes: data.file?.size || 1500000,
@@ -1091,7 +1096,7 @@ export const mockCommunitiesService: CommunitiesService = {
     ];
     const filtered = candidateProfiles.filter(
       (p) =>
-        p.handle.toLowerCase().includes(q) ||
+        (p.handle && p.handle.toLowerCase().includes(q)) ||
         (p.fullName && p.fullName.toLowerCase().includes(q))
     );
     return { data: filtered.slice(0, 20), error: null };
@@ -1108,7 +1113,87 @@ export const mockCommunitiesService: CommunitiesService = {
     if (subjectId) {
       result = result.filter((r) => r.subjectId === subjectId);
     }
-    return { data: result, error: null };
+
+    const enriched: Report[] = result.map((r) => {
+      let targetContent: Report["targetContent"] = undefined;
+      if (r.targetType === "post") {
+        const p = posts.find((item) => item.id === r.targetId);
+        if (p) {
+          targetContent = {
+            title: p.title,
+            body: p.body,
+            authorHandle: p.authorHandle,
+            authorName: p.authorName,
+            authorAvatarUrl: p.authorAvatarUrl,
+            postId: p.id,
+            subjectId: p.subjectId,
+            exists: true,
+          };
+        } else {
+          targetContent = { exists: false };
+        }
+      } else if (r.targetType === "comment") {
+        const c = comments.find((item) => item.id === r.targetId);
+        if (c) {
+          const parentPost = posts.find((item) => item.id === c.postId);
+          targetContent = {
+            title: parentPost?.title,
+            body: c.body,
+            authorHandle: c.authorHandle,
+            authorName: c.authorName,
+            authorAvatarUrl: c.authorAvatarUrl,
+            postId: c.postId,
+            subjectId: c.subjectId || parentPost?.subjectId,
+            exists: true,
+          };
+        } else {
+          targetContent = { exists: false };
+        }
+      } else if (r.targetType === "note") {
+        const n = resources.find((item) => item.id === r.targetId);
+        if (n) {
+          targetContent = {
+            title: n.title,
+            authorHandle: n.uploaderHandle,
+            authorName: n.uploaderName,
+            subjectId: n.subjectId,
+            exists: true,
+          };
+        } else {
+          targetContent = { exists: false };
+        }
+      }
+      return {
+        ...r,
+        targetContent,
+      };
+    });
+
+    return { data: enriched, error: null };
+  },
+
+  async createReport(data: {
+    subjectId: string;
+    targetType: "post" | "comment" | "note" | "user";
+    targetId: string;
+    reason: string;
+  }): Promise<Result<Report>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const newReport: Report = {
+      id: `rep-${Date.now()}`,
+      subjectId: data.subjectId,
+      reporterId: "mock-student-uuid",
+      targetType: data.targetType,
+      targetId: data.targetId,
+      reason: data.reason,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      reporterName: "Alex Chen",
+      reporterHandle: "alex_chen",
+    };
+    mockReports.unshift(newReport);
+    return { data: newReport, error: null };
   },
 
   async resolveReport(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>> {
@@ -1123,5 +1208,25 @@ export const mockCommunitiesService: CommunitiesService = {
       };
     }
     return { data: true, error: null };
+  },
+
+  async getStorageUsage(): Promise<
+    Result<{
+      userUsed: number;
+      userMax: number;
+      globalUsed: number;
+      globalMax: number;
+    }>
+  > {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    return {
+      data: {
+        userUsed: 12500000, // ~11.9 MB
+        userMax: 52428800, // 50 MB
+        globalUsed: 142000000, // ~135 MB
+        globalMax: 524288000, // 500 MB
+      },
+      error: null,
+    };
   },
 };

@@ -12,6 +12,7 @@ import type { Comment } from "../services/types";
 interface CommentTreeProps {
   comments: Comment[];
   subjectId?: string;
+  moderatorIds?: string[];
   onReply: (parentId: string, body: string, images?: string[]) => Promise<void>;
   onVoteComment?: (commentId: string, vote: 1 | -1 | null) => Promise<void>;
   onDeleteComment?: (commentId: string) => Promise<void>;
@@ -20,6 +21,7 @@ interface CommentTreeProps {
 export function CommentTree({
   comments,
   subjectId,
+  moderatorIds,
   onReply,
   onVoteComment,
   onDeleteComment,
@@ -68,6 +70,7 @@ export function CommentTree({
           depth={0}
           maxDepth={12}
           subjectId={subjectId}
+          moderatorIds={moderatorIds}
           onReply={onReply}
           onVoteComment={onVoteComment}
           onDeleteComment={onDeleteComment}

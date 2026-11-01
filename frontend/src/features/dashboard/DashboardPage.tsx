@@ -73,21 +73,21 @@ export default function DashboardPage() {
             Dashboard
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Welcome back{user?.fullName ? `, ${user.fullName}` : user?.handle ? `, @${user.handle}` : ""}.
+            Welcome back{user?.fullName ? `, ${user.fullName}` : ""}.
           </p>
         </div>
 
         {/* Subjects & Calendar Grid */}
-        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.8fr)]">
           {/* My Subjects */}
-          <Card className="border-border bg-card shadow-xs">
+          <Card className="flex flex-col border-border bg-card shadow-xs">
             <CardHeader className="border-b border-border px-5 py-4">
               <CardTitle className="text-base font-semibold">
                 My Subjects
               </CardTitle>
             </CardHeader>
 
-            <CardContent className="p-4 sm:p-5">
+            <CardContent className="flex-1 p-4 sm:p-5">
               {loadingSubjects ? (
                 <div className="py-6 text-center text-sm text-muted-foreground">
                   Loading enrolled subjects...
@@ -122,14 +122,14 @@ export default function DashboardPage() {
           </Card>
 
           {/* Calendar */}
-          <Card className="border-border bg-card shadow-xs">
+          <Card className="flex flex-col border-border bg-card shadow-xs">
             <CardHeader className="border-b border-border px-5 py-4">
               <CardTitle className="text-base font-semibold">
                 Calendar
               </CardTitle>
             </CardHeader>
 
-            <CardContent className="p-4 sm:p-5">
+            <CardContent className="flex-1 p-4 sm:p-5">
               <Calendar
                 mode="single"
                 month={calendarMonth}

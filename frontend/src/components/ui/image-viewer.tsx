@@ -37,6 +37,13 @@ export function ImageViewerModal({
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+  const [isWheeling, setIsWheeling] = useState(false);
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
+  const panRef = useRef(pan);
+  panRef.current = pan;
+  const wheelTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const dragStartRef = useRef({ x: 0, y: 0 });
   const initialPanRef = useRef({ x: 0, y: 0 });
   const didDragRef = useRef(false);
@@ -60,6 +67,77 @@ export function ImageViewerModal({
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen]);
+
+  // Non-passive wheel & gesture listener:
+  // Intercepts pinch-to-zoom (WheelEvent with ctrlKey) and scrolling inside the viewer,
+  // preventing Firefox / Chrome / Safari from zooming the browser window.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Prevent browser default window zoom and background page scroll
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Temporarily disable CSS transition during active gestures for instantaneous 60fps tracking
+      setIsWheeling(true);
+      if (wheelTimeoutRef.current) {
+        clearTimeout(wheelTimeoutRef.current);
+      }
+      wheelTimeoutRef.current = setTimeout(() => {
+        setIsWheeling(false);
+      }, 120);
+
+      if (e.ctrlKey) {
+        // Touchpad pinch-to-zoom gesture or Ctrl + Mouse Wheel
+        // Continuous smooth exponential scaling factor
+        const zoomFactor = Math.exp(-e.deltaY * 0.005);
+        setScale((prev) => {
+          const next = Math.min(Math.max(Number((prev * zoomFactor).toFixed(3)), 0.5), 4);
+          if (next <= 1) setPan({ x: 0, y: 0 });
+          return next;
+        });
+      } else {
+        // Standard scroll / swipe
+        if (scaleRef.current > 1 && (e.deltaX !== 0 || Math.abs(e.deltaY) < 40)) {
+          // Two-finger trackpad panning when zoomed in
+          setPan((prev) => ({
+            x: prev.x - e.deltaX,
+            y: prev.y - e.deltaY,
+          }));
+        } else {
+          // Mouse wheel stepped notch zoom
+          if (e.deltaY < 0) {
+            setScale((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 4));
+          } else if (e.deltaY > 0) {
+            setScale((prev) => {
+              const next = Math.max(Number((prev - 0.25).toFixed(2)), 0.5);
+              if (next <= 1) setPan({ x: 0, y: 0 });
+              return next;
+            });
+          }
+        }
+      }
+    };
+
+    // Prevent Safari gesture zoom
+    const handleGesture = (e: Event) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    window.addEventListener("gesturestart", handleGesture, { passive: false });
+    window.addEventListener("gesturechange", handleGesture, { passive: false });
+
+    return () => {
+      window.removeEventListener("wheel", handleWheel);
+      window.removeEventListener("gesturestart", handleGesture);
+      window.removeEventListener("gesturechange", handleGesture);
+      if (wheelTimeoutRef.current) {
+        clearTimeout(wheelTimeoutRef.current);
+      }
     };
   }, [isOpen]);
 
@@ -129,20 +207,6 @@ export function ImageViewerModal({
     };
   }, [isOpen, handlePrev, handleNext, onClose, resetTransform]);
 
-  // Mouse wheel zoom
-  const handleWheel = (e: React.WheelEvent) => {
-    e.stopPropagation();
-    if (e.deltaY < 0) {
-      setScale((prev) => Math.min(prev + 0.25, 4));
-    } else {
-      setScale((prev) => {
-        const next = Math.max(prev - 0.25, 0.5);
-        if (next <= 1) setPan({ x: 0, y: 0 });
-        return next;
-      });
-    }
-  };
-
   // Mouse drag panning (only active when zoomed in)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (scale <= 1) return;
@@ -176,8 +240,7 @@ export function ImageViewerModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-md select-none animate-in fade-in duration-200"
-      onWheel={handleWheel}
+      className="fixed inset-0 z-50 flex flex-col bg-black/95 backdrop-blur-md select-none touch-none animate-in fade-in duration-200"
       onMouseUp={handleMouseUp}
     >
       {/* Top Header Bar */}
@@ -283,7 +346,7 @@ export function ImageViewerModal({
           alt={title || `View ${currentIndex + 1} of ${total}`}
           style={{
             transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${scale})`,
-            transition: isDragging ? "none" : "transform 150ms ease-out",
+            transition: isDragging || isWheeling ? "none" : "transform 150ms ease-out",
           }}
           onClick={(e) => {
             e.stopPropagation();
@@ -291,7 +354,7 @@ export function ImageViewerModal({
               handleToggleZoom();
             }
           }}
-          className="max-h-[90vh] max-w-[94vw] object-contain select-none pointer-events-auto rounded-sm shadow-2xl"
+          className="max-h-[90vh] max-w-[94vw] object-contain select-none pointer-events-auto rounded-sm shadow-2xl touch-none"
           draggable={false}
         />
 

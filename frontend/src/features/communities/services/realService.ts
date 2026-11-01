@@ -80,7 +80,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
         .eq("subject_id", subjectId);
 
       if (search && search.trim()) {
@@ -128,6 +128,7 @@ export const realCommunitiesService: CommunitiesService = {
         id: row.id,
         subjectId: row.subject_id,
         authorId: row.author_id,
+        authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
@@ -155,7 +156,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       const { data: row, error } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
         .eq("id", postId)
         .single();
 
@@ -185,6 +186,7 @@ export const realCommunitiesService: CommunitiesService = {
         id: row.id,
         subjectId: row.subject_id,
         authorId: row.author_id,
+        authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
@@ -235,7 +237,7 @@ export const realCommunitiesService: CommunitiesService = {
       // 2. Fetch matching posts
       const { data: postRows } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, avatar_url), subjects(name)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url), subjects(name)")
         .ilike("title", `%${clean}%`)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -245,6 +247,7 @@ export const realCommunitiesService: CommunitiesService = {
         subjectId: row.subject_id,
         forumName: row.subjects?.name || "Community",
         authorId: row.author_id,
+        authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,
@@ -335,7 +338,7 @@ export const realCommunitiesService: CommunitiesService = {
           body: data.body ? data.body.trim() : "",
           images: uploadedImageUrls,
         })
-        .select("*, profiles!posts_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
         .single();
 
       if (error) {
@@ -349,6 +352,7 @@ export const realCommunitiesService: CommunitiesService = {
         id: inserted.id,
         subjectId: inserted.subject_id,
         authorId: inserted.author_id,
+        authorName: inserted.profiles?.full_name || "Student",
         authorHandle: inserted.profiles?.handle || "Anonymous",
         authorAvatarUrl: inserted.profiles?.avatar_url || null,
         title: inserted.title,
@@ -447,7 +451,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       const { data, error } = await supabase
         .from("comments")
-        .select("*, profiles!comments_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!comments_author_id_fkey(handle, full_name, avatar_url)")
         .eq("post_id", postId)
         .order("created_at", { ascending: true });
 
@@ -482,6 +486,7 @@ export const realCommunitiesService: CommunitiesService = {
         parentId: row.parent_id || null,
         depth: row.depth ?? 0,
         authorId: row.author_id,
+        authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
         body: row.body,
@@ -573,7 +578,7 @@ export const realCommunitiesService: CommunitiesService = {
       const { data: inserted, error } = await supabase
         .from("comments")
         .insert(insertPayload)
-        .select("*, profiles!comments_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!comments_author_id_fkey(handle, full_name, avatar_url)")
         .single();
 
       if (error) {
@@ -589,6 +594,7 @@ export const realCommunitiesService: CommunitiesService = {
         parentId: inserted.parent_id || null,
         depth: inserted.depth ?? 0,
         authorId: inserted.author_id,
+        authorName: inserted.profiles?.full_name || "Student",
         authorHandle: inserted.profiles?.handle || "Anonymous",
         authorAvatarUrl: inserted.profiles?.avatar_url || null,
         body: inserted.body,
@@ -683,7 +689,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("notes")
-        .select("*, profiles!notes_user_id_fkey(handle)")
+        .select("*, profiles!notes_user_id_fkey(handle, full_name)")
         .eq("subject_id", subjectId)
         .eq("is_shared", true);
 
@@ -710,6 +716,7 @@ export const realCommunitiesService: CommunitiesService = {
         category: (row.description && ["Day wise", "Unit wise", "Other"].includes(row.description))
           ? (row.description as any)
           : "Other",
+        uploaderName: row.profiles?.full_name || "Community Contributor",
         uploaderHandle: row.profiles?.handle || "Anonymous",
         pageCount: row.page_count ?? 1,
         fileSizeBytes: row.file_size_bytes ?? 0,
@@ -779,7 +786,7 @@ export const realCommunitiesService: CommunitiesService = {
           file_size_bytes: data.file.size,
           page_count: data.pageCount || 1,
         })
-        .select("*, profiles!notes_user_id_fkey(handle)")
+        .select("*, profiles!notes_user_id_fkey(handle, full_name)")
         .single();
 
       if (insertError) {
@@ -797,6 +804,7 @@ export const realCommunitiesService: CommunitiesService = {
         title: inserted.title,
         type: inserted.tag === "PYQ" ? "PYQ" : "Note",
         category: data.category || "Other",
+        uploaderName: inserted.profiles?.full_name || "Community Contributor",
         uploaderHandle: inserted.profiles?.handle || "Anonymous",
         pageCount: inserted.page_count ?? 1,
         storagePath: inserted.storage_path,
@@ -852,7 +860,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("notes")
-        .select("*, profiles!notes_user_id_fkey(handle)")
+        .select("*, profiles!notes_user_id_fkey(handle, full_name)")
         .eq("status", "pending");
 
       if (subjectId) {
@@ -873,6 +881,7 @@ export const realCommunitiesService: CommunitiesService = {
         category: (row.description && ["Day wise", "Unit wise", "Other"].includes(row.description))
           ? (row.description as any)
           : "Other",
+        uploaderName: row.profiles?.full_name || "Community Contributor",
         uploaderHandle: row.profiles?.handle || "Anonymous",
         pageCount: row.page_count ?? 1,
         fileSizeBytes: row.file_size_bytes ?? 0,
@@ -905,6 +914,7 @@ export const realCommunitiesService: CommunitiesService = {
         title: data.title,
         type: data.tag === "PYQ" ? "PYQ" : "Note",
         category: (data.description as any) || "Other",
+        uploaderName: "Community Contributor",
         uploaderHandle: "Community Contributor",
         pageCount: data.page_count ?? 1,
         fileSizeBytes: data.file_size_bytes ?? 0,
@@ -1041,7 +1051,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("reports")
-        .select("*, profiles!reports_reporter_id_fkey(handle)")
+        .select("*, profiles!reports_reporter_id_fkey(handle, full_name)")
         .order("created_at", { ascending: false });
 
       if (subjectId) {
@@ -1053,7 +1063,129 @@ export const realCommunitiesService: CommunitiesService = {
         return { data: null, error: { code: "INTERNAL", message: error.message } };
       }
 
-      const reports: Report[] = (data || []).map((row: any) => ({
+      const reports: Report[] = await Promise.all(
+        (data || []).map(async (row: any) => {
+          let targetContent: Report["targetContent"] = undefined;
+          try {
+            if (row.target_type === "post") {
+              const { data: postRow } = await supabase
+                .from("posts")
+                .select("id, title, body, subject_id, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+                .eq("id", row.target_id)
+                .maybeSingle();
+
+              if (postRow) {
+                targetContent = {
+                  title: postRow.title,
+                  body: postRow.body,
+                  authorHandle: (postRow as any).profiles?.handle,
+                  authorName: (postRow as any).profiles?.full_name,
+                  authorAvatarUrl: (postRow as any).profiles?.avatar_url,
+                  postId: postRow.id,
+                  subjectId: postRow.subject_id,
+                  exists: true,
+                };
+              } else {
+                targetContent = { exists: false };
+              }
+            } else if (row.target_type === "comment") {
+              const { data: commentRow } = await supabase
+                .from("comments")
+                .select("id, body, post_id, subject_id, profiles!comments_author_id_fkey(handle, full_name, avatar_url), posts(title)")
+                .eq("id", row.target_id)
+                .maybeSingle();
+
+              if (commentRow) {
+                targetContent = {
+                  title: (commentRow as any).posts?.title,
+                  body: commentRow.body,
+                  authorHandle: (commentRow as any).profiles?.handle,
+                  authorName: (commentRow as any).profiles?.full_name,
+                  authorAvatarUrl: (commentRow as any).profiles?.avatar_url,
+                  postId: commentRow.post_id,
+                  subjectId: commentRow.subject_id,
+                  exists: true,
+                };
+              } else {
+                targetContent = { exists: false };
+              }
+            } else if (row.target_type === "note") {
+              const { data: noteRow } = await supabase
+                .from("notes")
+                .select("id, title, subject_id, profiles!notes_user_id_fkey(handle, full_name)")
+                .eq("id", row.target_id)
+                .maybeSingle();
+
+              if (noteRow) {
+                targetContent = {
+                  title: noteRow.title,
+                  authorHandle: (noteRow as any).profiles?.handle,
+                  authorName: (noteRow as any).profiles?.full_name,
+                  subjectId: noteRow.subject_id,
+                  exists: true,
+                };
+              } else {
+                targetContent = { exists: false };
+              }
+            }
+          } catch {
+            // graceful fallback
+          }
+
+          return {
+            id: row.id,
+            subjectId: row.subject_id,
+            reporterId: row.reporter_id,
+            targetType: row.target_type,
+            targetId: row.target_id,
+            reason: row.reason,
+            status: row.status,
+            resolvedBy: row.resolved_by,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            reporterName: row.profiles?.full_name || "Anonymous",
+            reporterHandle: row.profiles?.handle || "anonymous",
+            targetContent,
+          };
+        })
+      );
+
+      return { data: reports, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async createReport(data: {
+    subjectId: string;
+    targetType: "post" | "comment" | "note" | "user";
+    targetId: string;
+    reason: string;
+  }): Promise<Result<Report>> {
+    try {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
+        return { data: null, error: { code: "UNAUTHENTICATED", message: "Sign in to report" } };
+      }
+
+      const { data: row, error } = await supabase
+        .from("reports")
+        .insert({
+          subject_id: data.subjectId,
+          reporter_id: user.id,
+          target_type: data.targetType,
+          target_id: data.targetId,
+          reason: data.reason,
+          status: "pending",
+        })
+        .select("*, profiles!reports_reporter_id_fkey(handle, full_name)")
+        .single();
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const report: Report = {
         id: row.id,
         subjectId: row.subject_id,
         reporterId: row.reporter_id,
@@ -1064,10 +1196,11 @@ export const realCommunitiesService: CommunitiesService = {
         resolvedBy: row.resolved_by,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        reporterName: row.profiles?.full_name || "Anonymous",
         reporterHandle: row.profiles?.handle || "anonymous",
-      }));
+      };
 
-      return { data: reports, error: null };
+      return { data: report, error: null };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
     }
@@ -1090,6 +1223,44 @@ export const realCommunitiesService: CommunitiesService = {
       }
 
       return { data: true, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getStorageUsage(): Promise<
+    Result<{
+      userUsed: number;
+      userMax: number;
+      globalUsed: number;
+      globalMax: number;
+    }>
+  > {
+    try {
+      const { data, error } = await supabase.rpc("get_my_storage_usage");
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+      if (data && data.length > 0) {
+        return {
+          data: {
+            userUsed: Number(data[0].user_used) || 0,
+            userMax: Number(data[0].user_max) || 52428800,
+            globalUsed: Number(data[0].global_used) || 0,
+            globalMax: Number(data[0].global_max) || 524288000,
+          },
+          error: null,
+        };
+      }
+      return {
+        data: {
+          userUsed: 0,
+          userMax: 52428800,
+          globalUsed: 0,
+          globalMax: 524288000,
+        },
+        error: null,
+      };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
     }

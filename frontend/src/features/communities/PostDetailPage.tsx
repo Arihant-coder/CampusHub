@@ -4,7 +4,7 @@
  * @owner Communities Team
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -17,11 +17,19 @@ import {
   Image as ImageIcon,
   X,
   Trash2,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ImageCarousel } from "./components/ImageCarousel";
 import { FormattedText } from "./components/FormattedText";
 import { RichContentEditor } from "./components/RichContentEditor";
@@ -31,7 +39,7 @@ import { communitiesService } from "./services";
 import { processCommunityImage } from "./utils/imagePipeline";
 import { useAuth } from "@/lib/auth-context";
 import { canModerate } from "@/shared/user";
-import type { Post, Comment, SubjectForum } from "./services/types";
+import type { Post, Comment, SubjectForum, CommunityModerator } from "./services/types";
 
 export default function PostDetailPage() {
   const { subjectId, postId } = useParams<{ subjectId?: string; postId?: string }>();
@@ -41,7 +49,42 @@ export default function PostDetailPage() {
   const [post, setPost] = useState<Post | null>(null);
   const [forum, setForum] = useState<SubjectForum | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [communityModerators, setCommunityModerators] = useState<CommunityModerator[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const isAuthorModerator = Boolean(
+    post && (
+      communityModerators.some((m) => m.userId === post.authorId) ||
+      post.authorId === "mock-admin-uuid"
+    )
+  );
+
+  const moderatorIds = useMemo(
+    () => communityModerators.map((m) => m.userId),
+    [communityModerators]
+  );
+
+  const handleCopyLink = () => {
+    navigator.clipboard?.writeText(window.location.href);
+    toast.success("Post link copied to clipboard!");
+  };
+
+  const handleReportPost = async () => {
+    if (!post) return;
+    try {
+      if (communitiesService.createReport) {
+        await communitiesService.createReport({
+          subjectId: post.subjectId,
+          targetType: "post",
+          targetId: post.id,
+          reason: "Reported as inappropriate or violating community guidelines.",
+        });
+      }
+      toast.success("Post reported to community moderators.");
+    } catch {
+      toast.error("Failed to submit report.");
+    }
+  };
 
   const canDeletePost = Boolean(
     user && post && (user.id === post.authorId || canModerate(user, post.subjectId))
@@ -88,6 +131,13 @@ export default function PostDetailPage() {
   const [commentImages, setCommentImages] = useState<string[]>([]);
   const [isProcessingCommentImages, setIsProcessingCommentImages] = useState(false);
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [isCommentBoxExpanded, setIsCommentBoxExpanded] = useState(false);
+
+  const handleCancelComment = () => {
+    setCommentText("");
+    setCommentImages([]);
+    setIsCommentBoxExpanded(false);
+  };
 
   // Voting state (same-color for up and down per requirement)
   const [currentUserVote, setCurrentUserVote] = useState<1 | -1 | null>(null);
@@ -117,6 +167,14 @@ export default function PostDetailPage() {
         if (forumsRes.data) {
           const matched = forumsRes.data.find((f) => f.id === currentSubjectId);
           setForum(matched || null);
+        }
+
+        if (currentSubjectId && communitiesService.getCommunityModerators) {
+          communitiesService.getCommunityModerators(currentSubjectId).then((modRes) => {
+            if (isMounted && modRes.data) {
+              setCommunityModerators(modRes.data);
+            }
+          });
         }
       }
 
@@ -208,6 +266,7 @@ export default function PostDetailPage() {
         setComments((prev) => [...prev, res.data]);
         setCommentText("");
         setCommentImages([]);
+        setIsCommentBoxExpanded(false);
         setPost((p) => (p ? { ...p, replyCount: p.replyCount + 1 } : null));
         toast.success("Comment posted!");
       }
@@ -319,9 +378,12 @@ export default function PostDetailPage() {
                     {forum ? `${forum.code} • ${forum.name}` : "Community"}
                   </button>
                   <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate">
-                    <span className="font-medium text-foreground/80">{post.authorHandle}</span>
-                    {canModerate(user, post.subjectId) && (
-                      <Badge variant="outline" className="text-[10px] py-0 px-1 border-primary/40 text-primary">
+                    <span className="font-medium text-foreground/80">{post.authorName || post.authorHandle || "Anonymous"}</span>
+                    {isAuthorModerator && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] py-0 px-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 font-medium"
+                      >
                         Moderator
                       </Badge>
                     )}
@@ -332,21 +394,46 @@ export default function PostDetailPage() {
               </div>
 
               <div className="flex items-center gap-1.5">
-                {canDeletePost && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDeletePost}
-                    className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10 gap-1.5 cursor-pointer"
-                    title="Delete post"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Delete</span>
-                  </Button>
-                )}
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                      title="More options"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem
+                      onClick={handleCopyLink}
+                      className="cursor-pointer gap-2 text-xs"
+                    >
+                      <Share2 className="h-3.5 w-3.5" />
+                      <span>Copy Link</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={handleReportPost}
+                      className="cursor-pointer gap-2 text-xs"
+                    >
+                      <Flag className="h-3.5 w-3.5" />
+                      <span>Report Post</span>
+                    </DropdownMenuItem>
+                    {canDeletePost && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={handleDeletePost}
+                          className="cursor-pointer gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Delete Post</span>
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
@@ -357,11 +444,12 @@ export default function PostDetailPage() {
 
             {/* IMAGES CAROUSEL: Directly above body text */}
             {postImages.length > 0 && (
-              <div className="pt-0.5">
+              <div className="pt-0.5 flex justify-center">
                 <ImageCarousel
                   images={postImages}
                   title={post.title}
-                  className="rounded-xl overflow-hidden shadow-xs"
+                  aspectClass="max-h-[360px] sm:max-h-[420px] min-h-[180px] sm:min-h-[220px]"
+                  className="w-full max-w-3xl rounded-xl overflow-hidden shadow-xs"
                 />
               </div>
             )}
@@ -425,9 +513,7 @@ export default function PostDetailPage() {
               {/* Share Button */}
               <button
                 type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(window.location.href);
-                }}
+                onClick={handleCopyLink}
                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border/80 bg-secondary/40 px-3 text-xs font-medium text-muted-foreground hover:bg-secondary/70 hover:text-foreground transition-colors cursor-pointer"
                 title="Copy link"
               >
@@ -436,82 +522,134 @@ export default function PostDetailPage() {
               </button>
             </div>
 
-            {/* Top-Level Add Comment Section (Single rounded rectangle box) */}
-            <div className="pt-2 space-y-1.5">
-              <div className="text-xs font-medium text-muted-foreground">
-                Comment as <span className="text-foreground font-semibold">Hashpotato</span>
-              </div>
-              <RichContentEditor
-                value={commentText}
-                onChange={setCommentText}
-                placeholder="What are your thoughts?"
-                compact={false}
-                minHeight="min-h-[85px]"
-                attachments={
-                  commentImages.length > 0 && (
-                    <div className="flex gap-2 px-3 pb-2 pt-0.5">
-                      {commentImages.map((img, idx) => (
-                        <div key={idx} className="relative group/thumb">
-                          <img
-                            src={img}
-                            alt="Comment attachment"
-                            className="h-16 w-16 object-cover rounded-md border"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCommentImage(idx)}
-                            className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-90 hover:opacity-100 shadow-xs"
-                            title="Remove image"
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                }
-                footer={
-                  <>
-                    <div className="flex items-center gap-2">
-                      {commentImages.length < 2 && (
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple={false}
-                            onChange={handleCommentImageUpload}
-                            disabled={isProcessingCommentImages}
-                            className="hidden"
-                          />
-                          {isProcessingCommentImages ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
-                          ) : (
-                            <ImageIcon className="h-3.5 w-3.5" />
-                          )}
-                          <span className="text-[11px] font-medium">
-                            {commentImages.length > 0 ? `${commentImages.length}/2 Images` : "Attach image"}
-                          </span>
-                        </label>
+            {/* Top-Level Add Comment Section (Reddit-style expandable single box) */}
+            <div className="pt-2">
+              {!isCommentBoxExpanded ? (
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setIsCommentBoxExpanded(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setIsCommentBoxExpanded(true);
+                    }
+                  }}
+                  className="group flex items-center justify-between gap-3 rounded-xl border border-border/70 bg-card hover:bg-muted/30 px-3.5 py-2.5 text-xs sm:text-sm text-muted-foreground hover:border-border transition-all cursor-text shadow-2xs select-none"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar className="h-6 w-6 border border-border shrink-0">
+                      {user?.avatarUrl && (
+                        <AvatarImage src={user.avatarUrl} alt={user.fullName || "User"} />
                       )}
-                    </div>
+                      <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
+                        {(user?.fullName || "U").slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-muted-foreground/80 group-hover:text-foreground transition-colors">
+                      What are your thoughts?
+                    </span>
+                  </div>
 
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleCreateTopLevelComment}
-                      disabled={!commentText.trim() || isSubmittingComment || isProcessingCommentImages}
-                      className="h-7 px-4 text-xs font-semibold rounded-full gap-1.5"
-                    >
-                      {isSubmittingComment ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <MessageSquare className="h-3.5 w-3.5" />
-                      )}
-                      <span>Comment</span>
-                    </Button>
-                  </>
-                }
-              />
+                  <span className="shrink-0 text-[11px] font-medium text-muted-foreground/60 hidden sm:inline">
+                    Comment as <span className="font-semibold text-foreground/80">{user?.fullName || "Student"}</span>
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-1.5 animate-in fade-in-50 duration-150">
+                  <div className="text-xs font-medium text-muted-foreground px-0.5">
+                    Comment as{" "}
+                    <span className="text-foreground font-semibold">
+                      {user?.fullName || "Student"}
+                    </span>
+                  </div>
+                  <RichContentEditor
+                    value={commentText}
+                    onChange={setCommentText}
+                    placeholder="What are your thoughts?"
+                    compact={false}
+                    autoFocus={true}
+                    minHeight="min-h-[85px]"
+                    attachments={
+                      commentImages.length > 0 && (
+                        <div className="flex gap-2 px-3 pb-2 pt-0.5">
+                          {commentImages.map((img, idx) => (
+                            <div key={idx} className="relative group/thumb">
+                              <img
+                                src={img}
+                                alt="Comment attachment"
+                                className="h-16 w-16 object-cover rounded-md border"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveCommentImage(idx)}
+                                className="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-90 hover:opacity-100 shadow-xs cursor-pointer"
+                                title="Remove image"
+                              >
+                                <X className="h-2.5 w-2.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    }
+                    footer={
+                      <>
+                        <div className="flex items-center gap-2">
+                          {commentImages.length < 2 && (
+                            <label className="cursor-pointer inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-muted transition-colors">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple={false}
+                                onChange={handleCommentImageUpload}
+                                disabled={isProcessingCommentImages}
+                                className="hidden"
+                              />
+                              {isProcessingCommentImages ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                              ) : (
+                                <ImageIcon className="h-3.5 w-3.5" />
+                              )}
+                              <span className="text-[11px] font-medium">
+                                {commentImages.length > 0 ? `${commentImages.length}/2 Images` : "Attach image"}
+                              </span>
+                            </label>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleCancelComment}
+                            disabled={isSubmittingComment}
+                            className="h-7 px-3 text-xs font-semibold rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
+                          >
+                            Cancel
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleCreateTopLevelComment}
+                            disabled={!commentText.trim() || isSubmittingComment || isProcessingCommentImages}
+                            className="h-7 px-4 text-xs font-semibold rounded-full gap-1.5 cursor-pointer"
+                          >
+                            {isSubmittingComment ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <MessageSquare className="h-3.5 w-3.5" />
+                            )}
+                            <span>Comment</span>
+                          </Button>
+                        </div>
+                      </>
+                    }
+                  />
+                </div>
+              )}
             </div>
 
             {/* 12-Level Nested Comments Thread */}
@@ -522,6 +660,7 @@ export default function PostDetailPage() {
               <CommentTree
                 comments={comments}
                 subjectId={post.subjectId}
+                moderatorIds={moderatorIds}
                 onReply={handleReplyToComment}
                 onVoteComment={handleVoteComment}
                 onDeleteComment={handleDeleteComment}

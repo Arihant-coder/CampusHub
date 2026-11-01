@@ -14,6 +14,7 @@ export interface UserProfile {
   role: UserRole;
   createdAt: string;
   moderatedSubjectIds?: string[];
+  email?: string;
 }
 
 /**

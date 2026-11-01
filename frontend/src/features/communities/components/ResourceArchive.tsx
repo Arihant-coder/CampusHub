@@ -70,7 +70,7 @@ export function ResourceArchive({
       result = result.filter(
         (n) =>
           n.title.toLowerCase().includes(q) ||
-          n.uploaderHandle.toLowerCase().includes(q)
+          (n.uploaderName || n.uploaderHandle || "").toLowerCase().includes(q)
       );
     }
 
@@ -92,7 +92,7 @@ export function ResourceArchive({
       result = result.filter(
         (n) =>
           n.title.toLowerCase().includes(q) ||
-          n.uploaderHandle.toLowerCase().includes(q)
+          (n.uploaderName || n.uploaderHandle || "").toLowerCase().includes(q)
       );
     }
 

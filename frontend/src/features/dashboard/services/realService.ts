@@ -87,7 +87,7 @@ export const realDashboardService: DashboardService = {
     try {
       const { data, error } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
         .order("hot_score", { ascending: false })
         .limit(limit);
 
@@ -102,6 +102,7 @@ export const realDashboardService: DashboardService = {
         id: row.id,
         subjectId: row.subject_id,
         authorId: row.author_id,
+        authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
         title: row.title,

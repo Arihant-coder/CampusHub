@@ -83,7 +83,7 @@ export function ThreadComments({
         {/* Header */}
         <div className="p-5 border-b space-y-2">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">@{post.authorHandle}</span>
+            <span className="font-semibold text-foreground">{post.authorName || post.authorHandle || "Anonymous"}</span>
             <span>•</span>
             <span>{post.replyCount} replies</span>
           </div>
@@ -116,16 +116,16 @@ export function ThreadComments({
               >
                 <Avatar className="h-7 w-7 shrink-0">
                   {comment.authorAvatarUrl && (
-                    <AvatarImage src={comment.authorAvatarUrl} alt={comment.authorHandle} />
+                    <AvatarImage src={comment.authorAvatarUrl} alt={comment.authorName || "User"} />
                   )}
                   <AvatarFallback className="text-[10px] bg-secondary font-semibold">
-                    {comment.authorHandle.slice(0, 2).toUpperCase()}
+                    {(comment.authorName || comment.authorHandle || "U").slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0 space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-foreground">
-                      {comment.authorHandle}
+                      {comment.authorName || comment.authorHandle || "Anonymous"}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
                       {new Date(comment.createdAt).toLocaleDateString()}

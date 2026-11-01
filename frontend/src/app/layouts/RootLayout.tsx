@@ -136,7 +136,7 @@ function RootLayoutContent() {
   });
 
   const pageTitle = customTitle || getPageTitle(location.pathname);
-  const isSubjectWorkspace = /^\/subjects\/[^/]+/.test(location.pathname);
+  const isSubjectWorkspace = location.pathname.startsWith("/subjects");
 
   const isStudentToolsActive = studentTools.some((tool) => location.pathname.startsWith(tool.to));
   const isSubjectsActive = location.pathname.startsWith("/subjects");

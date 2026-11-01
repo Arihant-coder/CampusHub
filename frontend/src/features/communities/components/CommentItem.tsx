@@ -15,9 +15,19 @@ import {
   Image as ImageIcon,
   X,
   Trash2,
+  MoreHorizontal,
+  Flag,
+  Copy,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FormattedText } from "./FormattedText";
 import { RichContentEditor } from "./RichContentEditor";
 import { processCommunityImage } from "../utils/imagePipeline";
@@ -25,6 +35,7 @@ import { useImageViewer } from "@/lib/image-viewer-context";
 import { useAuth } from "@/lib/auth-context";
 import { canModerate } from "@/shared/user";
 import { toast } from "sonner";
+import { communitiesService } from "../services";
 import type { Comment } from "../services/types";
 
 // Reddit-style crisp circular minus icon [⊖]
@@ -71,6 +82,7 @@ interface CommentItemProps {
   depth?: number;
   maxDepth?: number;
   subjectId?: string;
+  moderatorIds?: string[];
   onReply: (parentId: string, body: string, images?: string[]) => Promise<void>;
   onVoteComment?: (commentId: string, vote: 1 | -1 | null) => Promise<void>;
   onDeleteComment?: (commentId: string) => Promise<void>;
@@ -81,6 +93,7 @@ export function CommentItem({
   depth = 0,
   maxDepth = 12,
   subjectId,
+  moderatorIds,
   onReply,
   onVoteComment,
   onDeleteComment,
@@ -95,6 +108,10 @@ export function CommentItem({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const effectiveSubjectId = subjectId || comment.subjectId;
+  const isAuthorModerator = Boolean(
+    moderatorIds?.includes(comment.authorId) ||
+      comment.authorId === "mock-admin-uuid"
+  );
   const canDeleteComment = Boolean(
     onDeleteComment &&
       user &&
@@ -217,8 +234,13 @@ export function CommentItem({
           </div>
 
           <span className="font-semibold text-foreground group-hover/collapsed:underline">
-            {comment.authorHandle}
+            {comment.authorName || comment.authorHandle || "Anonymous"}
           </span>
+          {isAuthorModerator && (
+            <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1 py-0.2">
+              MOD
+            </span>
+          )}
           <span>•</span>
           <span className="text-[11px]">{formatTime(comment.createdAt)}</span>
           {descendantCount > 0 && (
@@ -233,20 +255,25 @@ export function CommentItem({
 
   return (
     <div className={`relative ${depth === 0 ? "mt-5 first:mt-0" : "mt-3.5"}`}>
-      {/* Header Row: Avatar + Handle + Time */}
+      {/* Header Row: Avatar + Name + Time */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground select-none relative z-10">
         <Avatar className="h-6 w-6 shrink-0 relative z-10 bg-background">
           {comment.authorAvatarUrl && (
-            <AvatarImage src={comment.authorAvatarUrl} alt={comment.authorHandle} />
+            <AvatarImage src={comment.authorAvatarUrl} alt={comment.authorName || "User"} />
           )}
           <AvatarFallback className="text-[9px] bg-secondary font-semibold">
-            {comment.authorHandle.slice(0, 2).toUpperCase()}
+            {(comment.authorName || comment.authorHandle || "U").slice(0, 2).toUpperCase()}
           </AvatarFallback>
         </Avatar>
 
         <span className="font-semibold text-foreground hover:underline cursor-pointer">
-          {comment.authorHandle}
+          {comment.authorName || comment.authorHandle || "Anonymous"}
         </span>
+        {isAuthorModerator && (
+          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded px-1 py-0.2">
+            MOD
+          </span>
+        )}
         <span>•</span>
         <span className="text-[11px]">{formatTime(comment.createdAt)}</span>
       </div>
@@ -266,7 +293,7 @@ export function CommentItem({
                   openImageViewer({
                     images: comment.images!,
                     initialIndex: idx,
-                    title: `Image from ${comment.authorHandle}`,
+                    title: `Image from ${comment.authorName || comment.authorHandle || "User"}`,
                   });
                 }}
                 className="max-h-48 max-w-xs rounded-lg border object-cover shadow-2xs cursor-zoom-in hover:opacity-95 transition-opacity"
@@ -352,26 +379,72 @@ export function CommentItem({
           type="button"
           onClick={() => {
             navigator.clipboard?.writeText(window.location.href);
+            toast.success("Comment link copied to clipboard!");
           }}
-          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary/60 transition-colors"
+          className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground hover:text-foreground px-2 py-1 rounded-md hover:bg-secondary/60 transition-colors cursor-pointer"
           title="Copy link"
         >
           <Share2 className="h-3 w-3" />
           <span>Share</span>
         </button>
 
-        {/* Delete Button (Ownership or Community Moderator / Admin) */}
-        {canDeleteComment && (
-          <button
-            type="button"
-            onClick={() => onDeleteComment?.(comment.id)}
-            className="flex items-center gap-1 text-[11px] font-medium text-destructive/80 hover:text-destructive px-2 py-1 rounded-md hover:bg-destructive/10 transition-colors cursor-pointer"
-            title="Delete comment"
-          >
-            <Trash2 className="h-3 w-3" />
-            <span>Delete</span>
-          </button>
-        )}
+        {/* Comment Options Menu (Tucks away delete for staff/authors, report, copy) */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex items-center justify-center h-6 w-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary/60 transition-colors cursor-pointer"
+              title="More options"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-40">
+            <DropdownMenuItem
+              onClick={() => {
+                navigator.clipboard?.writeText(comment.body);
+                toast.success("Comment text copied to clipboard!");
+              }}
+              className="cursor-pointer gap-2 text-xs"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              <span>Copy Text</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                try {
+                  if (communitiesService.createReport) {
+                    await communitiesService.createReport({
+                      subjectId: effectiveSubjectId || "cs301",
+                      targetType: "comment",
+                      targetId: comment.id,
+                      reason: "Reported as inappropriate or violating community guidelines.",
+                    });
+                  }
+                  toast.success("Comment reported to community moderators.");
+                } catch {
+                  toast.error("Failed to submit report.");
+                }
+              }}
+              className="cursor-pointer gap-2 text-xs"
+            >
+              <Flag className="h-3.5 w-3.5" />
+              <span>Report</span>
+            </DropdownMenuItem>
+            {canDeleteComment && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => onDeleteComment?.(comment.id)}
+                  className="cursor-pointer gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Delete</span>
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Inline Reply Editor Box (Single rounded rectangle box) */}
@@ -380,7 +453,7 @@ export function CommentItem({
           <RichContentEditor
             value={replyText}
             onChange={setReplyText}
-            placeholder={`Reply to ${comment.authorHandle}...`}
+            placeholder={`Reply to ${comment.authorName || comment.authorHandle || "User"}...`}
             compact={true}
             autoFocus={true}
             attachments={
@@ -483,6 +556,7 @@ export function CommentItem({
               depth={depth + 1}
               maxDepth={maxDepth}
               subjectId={effectiveSubjectId}
+              moderatorIds={moderatorIds}
               onReply={onReply}
               onVoteComment={onVoteComment}
               onDeleteComment={onDeleteComment}

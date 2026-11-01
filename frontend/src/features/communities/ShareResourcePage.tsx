@@ -34,7 +34,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { communitiesService } from "./services";
 import type { ResourceType, ResourceCategory } from "./services/types";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 import { PdfOptimizerModal } from "./components/PdfOptimizerModal";
 
 export const ShareResourcePage: React.FC = () => {
@@ -74,16 +73,13 @@ export const ShareResourcePage: React.FC = () => {
         if (found) setSubjectName(found.name);
       }
 
-      // Live Quota Fetch via RPC
+      // Live Quota Fetch via Service Layer (Mock & Real Supabase parity)
       try {
-        const { data, error } = await supabase.rpc("get_my_storage_usage");
-        if (!error && data && data.length > 0) {
-          setQuotaUsage({
-            userUsed: Number(data[0].user_used) || 0,
-            userMax: Number(data[0].user_max) || 52428800,
-            globalUsed: Number(data[0].global_used) || 0,
-            globalMax: Number(data[0].global_max) || 524288000,
-          });
+        if (communitiesService.getStorageUsage) {
+          const quotaRes = await communitiesService.getStorageUsage();
+          if (quotaRes.data) {
+            setQuotaUsage(quotaRes.data);
+          }
         }
       } catch (err) {
         console.error("Quota inspection error:", err);

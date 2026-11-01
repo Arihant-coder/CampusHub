@@ -56,4 +56,18 @@
     min-height: 100vh;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+
+  .milkdown-editor .milkdown {
+    min-height: 100%;
+    --crepe-base-font-size: 0.9375rem;
+    --crepe-color-background: hsl(var(--background));
+    --crepe-color-surface: hsl(var(--background));
+    --crepe-color-on-surface: hsl(var(--foreground));
+  }
+
+  .milkdown-editor .ProseMirror {
+    min-height: 100%;
+    padding: 1.5rem 2rem 4rem;
+    outline: none;
+  }
 }

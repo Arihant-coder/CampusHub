@@ -247,7 +247,7 @@ export function GlobalSearchBar() {
                                   {post.forumName}
                                 </Badge>
                               )}
-                              <span>u/{post.authorHandle}</span>
+                              <span>{post.authorName || post.authorHandle || "Anonymous"}</span>
                               <span>•</span>
                               <span>{post.upvotes} upvotes</span>
                             </div>

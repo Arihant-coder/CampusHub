@@ -19,7 +19,7 @@ export function ImageCarousel({
   images,
   title = "Post image",
   className = "",
-  aspectClass = "max-h-[520px] min-h-[260px] sm:min-h-[360px]",
+  aspectClass = "max-h-[380px] sm:max-h-[440px] min-h-[180px] sm:min-h-[220px]",
 }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const { openImageViewer } = useImageViewer();

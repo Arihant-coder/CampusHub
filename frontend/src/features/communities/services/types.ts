@@ -31,6 +31,7 @@ export interface Comment {
   depth?: number;
   authorId: string;
   authorHandle: string;
+  authorName?: string;
   authorAvatarUrl?: string | null;
   body: string;
   images?: string[];
@@ -49,6 +50,7 @@ export interface ResourceNote {
   type: ResourceType; // "Note" | "PYQ"
   category: ResourceCategory; // "Day wise" | "Unit wise" | "Other"
   uploaderHandle: string;
+  uploaderName?: string;
   pageCount?: number;
   fileSizeBytes?: number;
   storagePath: string;
@@ -73,6 +75,17 @@ export interface ProfileSearchResult {
   fullName: string | null;
 }
 
+export interface ReportTargetContent {
+  title?: string;
+  body?: string;
+  authorHandle?: string;
+  authorName?: string;
+  authorAvatarUrl?: string | null;
+  postId?: string; // parent post id for comments so the moderator can open it
+  subjectId?: string;
+  exists?: boolean;
+}
+
 export interface Report {
   id: string;
   subjectId: string;
@@ -85,6 +98,8 @@ export interface Report {
   createdAt: string;
   updatedAt: string;
   reporterHandle?: string;
+  reporterName?: string;
+  targetContent?: ReportTargetContent;
 }
 
 export interface GlobalSearchResult {
@@ -134,5 +149,19 @@ export interface CommunitiesService {
   searchProfilesForAdmin?(query: string): Promise<Result<ProfileSearchResult[]>>;
   setUserRole?(userId: string, role: UserRole): Promise<Result<void>>;
   getReports?(subjectId?: string): Promise<Result<Report[]>>;
+  createReport?(data: {
+    subjectId: string;
+    targetType: "post" | "comment" | "note" | "user";
+    targetId: string;
+    reason: string;
+  }): Promise<Result<Report>>;
   resolveReport?(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>>;
+  getStorageUsage?(): Promise<
+    Result<{
+      userUsed: number;
+      userMax: number;
+      globalUsed: number;
+      globalMax: number;
+    }>
+  >;
 }
