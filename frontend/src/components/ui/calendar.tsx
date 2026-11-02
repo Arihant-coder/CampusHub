@@ -69,25 +69,25 @@ function Calendar({
           classNames?.month_caption
         ),
         dropdowns: cn(
-          "flex h-7 w-full items-center justify-center gap-1.5 text-sm font-medium",
+          "flex h-7 w-full items-center justify-center gap-2 text-sm font-medium",
           defaultClassNames.dropdowns,
           classNames?.dropdowns
         ),
         dropdown_root: cn(
-          "has-focus:border-ring border-input shadow-xs has-focus:ring-ring/50 has-focus:ring-[3px] relative rounded-md border",
+          "relative inline-flex items-center rounded-md border border-input/60 bg-background px-2 py-0.5 text-xs font-semibold shadow-2xs hover:bg-muted/70 transition-colors cursor-pointer",
           defaultClassNames.dropdown_root,
           classNames?.dropdown_root
         ),
         dropdown: cn(
-          "bg-popover absolute inset-0 opacity-0",
+          "absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 bg-background text-foreground",
           defaultClassNames.dropdown,
           classNames?.dropdown
         ),
         caption_label: cn(
-          "select-none font-semibold text-sm tracking-tight text-foreground",
+          "select-none font-semibold text-sm tracking-tight text-foreground flex items-center gap-1",
           captionLayout === "label"
             ? ""
-            : "[&>svg]:text-muted-foreground flex h-7 items-center gap-1 rounded-md pl-2 pr-1 text-sm [&>svg]:size-3.5",
+            : "[&>svg]:text-muted-foreground flex items-center gap-1 text-xs sm:text-sm font-semibold [&>svg]:size-3.5",
           defaultClassNames.caption_label,
           classNames?.caption_label
         ),
@@ -218,6 +218,10 @@ function CalendarDayButton({
 
   const { className: _rdpClassName, ...restProps } = props as any
 
+  const hasEvent = Boolean((modifiers as any).hasEvent)
+  const isTest = Boolean((modifiers as any).isTest)
+  const isStreak = Boolean((modifiers as any).streak)
+
   return (
     <Button
       ref={ref}
@@ -226,18 +230,37 @@ function CalendarDayButton({
       data-day={day.date.toLocaleDateString()}
       {...restProps}
       className={cn(
-        "h-8 w-8 sm:h-9 sm:w-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex items-center justify-center transition-colors cursor-pointer",
+        "relative h-8 w-8 sm:h-9 sm:w-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex flex-col items-center justify-center transition-colors cursor-pointer",
         modifiers.selected
           ? "bg-primary text-primary-foreground font-semibold hover:bg-primary hover:text-primary-foreground shadow-xs"
-          : modifiers.today
-            ? "bg-primary/10 font-semibold text-primary hover:bg-primary/20"
-            : "hover:bg-muted text-foreground",
+          : isStreak
+            ? cn(
+                "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-bold hover:bg-emerald-500/30 ring-1 ring-emerald-500/40",
+                modifiers.today && "ring-2 ring-emerald-600 dark:ring-emerald-400"
+              )
+            : modifiers.today
+              ? "bg-primary/10 font-semibold text-primary hover:bg-primary/20 ring-1 ring-primary/30"
+              : "hover:bg-muted text-foreground",
         modifiers.outside && "text-muted-foreground/30 pointer-events-none hover:bg-transparent",
         defaultClassNames.day_button,
         className
       )}
     >
-      {children}
+      <span className="leading-none">{children}</span>
+
+      {/* Visual Indicator Dot for tests / events */}
+      {hasEvent && !modifiers.outside && (
+        <span
+          className={cn(
+            "absolute bottom-1 h-1.5 w-1.5 rounded-full transition-transform",
+            modifiers.selected
+              ? "bg-primary-foreground"
+              : isTest
+                ? "bg-rose-500 ring-1 ring-rose-400 shadow-xs"
+                : "bg-amber-500 ring-1 ring-amber-400 shadow-xs"
+          )}
+        />
+      )}
     </Button>
   )
 }
