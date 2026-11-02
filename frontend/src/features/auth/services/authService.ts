@@ -160,8 +160,13 @@ export const authService = {
             error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
-        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(match.profile));
-        return { data: match.profile, error: null };
+        sessionStorage.removeItem("campushub:just_registered");
+        const profile: UserProfile = {
+          ...match.profile,
+          privacyOnboardingCompleted: true,
+        };
+        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(profile));
+        return { data: profile, error: null };
       }
 
       // Check registered mock accounts
@@ -179,8 +184,13 @@ export const authService = {
             error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
-        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(registeredMatch.profile));
-        return { data: registeredMatch.profile, error: null };
+        sessionStorage.removeItem("campushub:just_registered");
+        const profile: UserProfile = {
+          ...registeredMatch.profile,
+          privacyOnboardingCompleted: true,
+        };
+        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(profile));
+        return { data: profile, error: null };
       }
 
       return {
@@ -217,9 +227,21 @@ export const authService = {
         };
       }
 
+      sessionStorage.removeItem("campushub:just_registered");
       const profile = await this.getLiveProfile(data.user.id);
       if (profile) {
-        return { data: profile, error: null };
+        const existingProfile: UserProfile = {
+          ...profile,
+          privacyOnboardingCompleted: true,
+        };
+        if (!profile.privacyOnboardingCompleted) {
+          supabase
+            .from("profiles")
+            .update({ privacy_onboarding_completed: true })
+            .eq("id", data.user.id)
+            .then();
+        }
+        return { data: existingProfile, error: null };
       }
 
       // Fallback profile if row is still synchronizing
@@ -231,6 +253,8 @@ export const authService = {
           avatarUrl: data.user.user_metadata?.avatar_url || null,
           role: "student",
           createdAt: data.user.created_at,
+          isPrivate: false,
+          privacyOnboardingCompleted: true,
         },
         error: null,
       };
@@ -293,6 +317,7 @@ export const authService = {
         profile: newMockProfile,
       });
 
+      sessionStorage.setItem("campushub:just_registered", "true");
       localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(newMockProfile));
       return { data: { ...newMockProfile, requiresVerification: false }, error: null };
     }
@@ -338,6 +363,9 @@ export const authService = {
       }
 
       const hasSession = Boolean(data.session);
+      if (hasSession) {
+        sessionStorage.setItem("campushub:just_registered", "true");
+      }
       const profile = await this.getLiveProfile(data.user.id);
       return {
         data: {
@@ -348,6 +376,8 @@ export const authService = {
             avatarUrl: null,
             role: "student",
             createdAt: data.user.created_at,
+            isPrivate: false,
+            privacyOnboardingCompleted: false,
           }),
           requiresVerification: !hasSession,
         },
@@ -422,6 +452,7 @@ export const authService = {
    * Log out from active mode.
    */
   async logout(isMock: boolean): Promise<void> {
+    sessionStorage.removeItem("campushub:just_registered");
     if (isMock) {
       localStorage.removeItem(MOCK_STORAGE_KEY);
     } else {
@@ -476,7 +507,7 @@ export const authService = {
       moderatedSubjectIds,
       email,
       isPrivate: data.is_private ?? false,
-      privacyOnboardingCompleted: data.privacy_onboarding_completed ?? false,
+      privacyOnboardingCompleted: data.privacy_onboarding_completed ?? true,
     };
   },
 
