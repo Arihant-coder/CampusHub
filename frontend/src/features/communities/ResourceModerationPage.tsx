@@ -27,7 +27,6 @@ import { Card } from "@/components/ui/card";
 import { communitiesService } from "./services";
 import type { ResourceNote, ResourceCategory, ResourceType, SubjectForum, Report } from "./services/types";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const ResourceModerationPage: React.FC = () => {
@@ -214,16 +213,16 @@ export const ResourceModerationPage: React.FC = () => {
 
     try {
       setOpeningId(note.id);
-      const { data, error } = await supabase.storage
-        .from("subject-notes")
-        .createSignedUrl(note.storagePath, 120);
+      const res = communitiesService.getDocumentUrl
+        ? await communitiesService.getDocumentUrl(note.storagePath)
+        : { data: null, error: { code: "UNSUPPORTED", message: "Preview unavailable" } };
 
-      if (error || !data?.signedUrl) {
-        toast.error(error?.message || "Document preview unavailable in current environment.");
+      if (res.error || !res.data) {
+        toast.error(res.error?.message || "Document preview unavailable in current environment.");
         return;
       }
 
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      window.open(res.data, "_blank", "noopener,noreferrer");
     } catch (err: any) {
       toast.error(err.message || "Failed to open document preview.");
     } finally {

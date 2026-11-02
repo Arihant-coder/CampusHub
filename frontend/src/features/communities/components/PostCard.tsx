@@ -188,7 +188,12 @@ export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCar
               @{post.authorHandle}
             </span>
           )}
-          {(post.authorRole === "moderator" || post.authorRole === "admin") && (
+          {post.authorRole === "admin" && (
+            <span className="rounded border border-red-300 bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-300">
+              Admin
+            </span>
+          )}
+          {post.authorRole === "moderator" && (
             <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
               Moderator
             </span>

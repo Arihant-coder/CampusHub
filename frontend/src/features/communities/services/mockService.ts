@@ -1223,6 +1223,15 @@ export const mockCommunitiesService: CommunitiesService = {
     return { data: true, error: null };
   },
 
+  async getDocumentUrl(storagePath: string): Promise<Result<string>> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Provide a valid demo PDF URL or object preview for offline testing
+    return {
+      data: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      error: null,
+    };
+  },
+
   async getStorageUsage(): Promise<
     Result<{
       userUsed: number;

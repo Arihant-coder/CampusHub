@@ -156,6 +156,7 @@ export interface CommunitiesService {
     reason: string;
   }): Promise<Result<Report>>;
   resolveReport?(reportId: string, status: "resolved" | "dismissed"): Promise<Result<boolean>>;
+  getDocumentUrl?(storagePath: string): Promise<Result<string>>;
   getStorageUsage?(): Promise<
     Result<{
       userUsed: number;

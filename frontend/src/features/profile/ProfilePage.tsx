@@ -99,6 +99,7 @@ export function ProfilePage() {
     setAuthUser({
       ...user,
       isPrivate: checked,
+      privacyOnboardingCompleted: true,
     });
     toast.success(checked ? "Profile set to Private." : "Profile set to Public.");
   };

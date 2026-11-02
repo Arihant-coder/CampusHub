@@ -9,7 +9,7 @@ import type { Post } from "@/shared/communities";
 import type { UserProfile } from "@/shared/user";
 import type { ProfileService, PublicUserProfile } from "../types";
 
-const MOCK_STORAGE_KEY = "campushub:mock_user";
+const MOCK_STORAGE_KEY = "campushub:mock_session";
 const MOCK_REGISTERED_USERS_KEY = "campushub:mock_registered_users";
 
 const DEFAULT_MOCK_PROFILES: Record<string, UserProfile> = {

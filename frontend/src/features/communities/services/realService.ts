@@ -80,7 +80,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role)")
         .eq("subject_id", subjectId);
 
       if (search && search.trim()) {
@@ -105,6 +105,13 @@ export const realCommunitiesService: CommunitiesService = {
           error: { code: "INTERNAL", message: error.message },
         };
       }
+
+      // Query subject moderators for dynamic authorRole assignment
+      const { data: modRows } = await supabase
+        .from("community_moderators")
+        .select("user_id")
+        .eq("subject_id", subjectId);
+      const modIds = new Set((modRows || []).map((m: any) => m.user_id));
 
       const user = (await supabase.auth.getUser()).data.user;
 
@@ -131,6 +138,11 @@ export const realCommunitiesService: CommunitiesService = {
         authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
+        authorRole: row.profiles?.role === "admin"
+          ? "admin"
+          : modIds.has(row.author_id)
+          ? "moderator"
+          : "student",
         title: row.title,
         body: row.body,
         images: row.images || [],
@@ -156,7 +168,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       const { data: row, error } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role)")
         .eq("id", postId)
         .single();
 
@@ -165,6 +177,22 @@ export const realCommunitiesService: CommunitiesService = {
           data: null,
           error: { code: "NOT_FOUND", message: error?.message || "Post not found" },
         };
+      }
+
+      // Check author role dynamically
+      let authorRole: "admin" | "moderator" | "student" = "student";
+      if (row.profiles?.role === "admin") {
+        authorRole = "admin";
+      } else {
+        const { data: modCheck } = await supabase
+          .from("community_moderators")
+          .select("user_id")
+          .eq("subject_id", row.subject_id)
+          .eq("user_id", row.author_id)
+          .maybeSingle();
+        if (modCheck) {
+          authorRole = "moderator";
+        }
       }
 
       const user = (await supabase.auth.getUser()).data.user;
@@ -189,6 +217,7 @@ export const realCommunitiesService: CommunitiesService = {
         authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
+        authorRole,
         title: row.title,
         body: row.body || "",
         images: row.images || [],
@@ -237,7 +266,7 @@ export const realCommunitiesService: CommunitiesService = {
       // 2. Fetch matching posts
       const { data: postRows } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url), subjects(name)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role), subjects(name)")
         .ilike("title", `%${clean}%`)
         .order("created_at", { ascending: false })
         .limit(10);
@@ -250,6 +279,7 @@ export const realCommunitiesService: CommunitiesService = {
         authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
+        authorRole: row.profiles?.role === "admin" ? "admin" : "student",
         title: row.title,
         body: row.body || "",
         images: row.images || [],
@@ -1264,6 +1294,28 @@ export const realCommunitiesService: CommunitiesService = {
       return { data: true, error: null };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getDocumentUrl(storagePath: string): Promise<Result<string>> {
+    try {
+      const { data, error } = await supabase.storage
+        .from("subject-notes")
+        .createSignedUrl(storagePath, 120);
+
+      if (error || !data?.signedUrl) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error?.message || "Failed to generate document download link." },
+        };
+      }
+
+      return { data: data.signedUrl, error: null };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message },
+      };
     }
   },
 

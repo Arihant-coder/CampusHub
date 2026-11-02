@@ -31,17 +31,17 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
-import { communitiesService } from "@/features/communities/services";
+import { adminService } from "./services";
 import type {
-  SubjectForum,
+  AdminSubject,
   CommunityModerator,
   ProfileSearchResult,
-} from "@/features/communities/services/types";
+} from "./services/types";
 
 export const ModeratorsAdminPage: React.FC = () => {
   const { user, refreshProfile } = useAuth();
 
-  const [subjects, setSubjects] = useState<SubjectForum[]>([]);
+  const [subjects, setSubjects] = useState<AdminSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [moderators, setModerators] = useState<CommunityModerator[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -58,7 +58,7 @@ export const ModeratorsAdminPage: React.FC = () => {
   useEffect(() => {
     let isMounted = true;
     setIsLoadingSubjects(true);
-    communitiesService.getSubjectForums().then((res) => {
+    adminService.getSubjects().then((res) => {
       if (!isMounted) return;
       if (res.data && res.data.length > 0) {
         setSubjects(res.data);
@@ -76,11 +76,9 @@ export const ModeratorsAdminPage: React.FC = () => {
     if (!subjectId) return;
     try {
       setIsLoadingModerators(true);
-      if (communitiesService.getCommunityModerators) {
-        const res = await communitiesService.getCommunityModerators(subjectId);
-        if (res.data) {
-          setModerators(res.data);
-        }
+      const res = await adminService.getCommunityModerators(subjectId);
+      if (res.data) {
+        setModerators(res.data);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to load moderators.");
@@ -106,11 +104,9 @@ export const ModeratorsAdminPage: React.FC = () => {
     const timer = setTimeout(async () => {
       try {
         setIsSearching(true);
-        if (communitiesService.searchProfilesForAdmin) {
-          const res = await communitiesService.searchProfilesForAdmin(trimmed);
-          if (res.data) {
-            setSearchResults(res.data);
-          }
+        const res = await adminService.searchProfiles(trimmed);
+        if (res.data) {
+          setSearchResults(res.data);
         }
       } catch (err: any) {
         console.error("Profile search error:", err);
@@ -134,12 +130,10 @@ export const ModeratorsAdminPage: React.FC = () => {
 
     try {
       setIsAssigning(profile.id);
-      if (communitiesService.assignModerator) {
-        const res = await communitiesService.assignModerator(selectedSubjectId, profile.id);
-        if (res.error) {
-          toast.error(res.error.message || "Failed to assign moderator.");
-          return;
-        }
+      const res = await adminService.assignModerator(selectedSubjectId, profile.id);
+      if (res.error) {
+        toast.error(res.error.message || "Failed to assign moderator.");
+        return;
       }
 
       toast.success(`Assigned ${profile.fullName || "User"} as moderator.`);
@@ -173,12 +167,10 @@ export const ModeratorsAdminPage: React.FC = () => {
 
     try {
       setIsRemoving(mod.userId);
-      if (communitiesService.removeModerator) {
-        const res = await communitiesService.removeModerator(selectedSubjectId, mod.userId);
-        if (res.error) {
-          toast.error(res.error.message || "Failed to remove moderator.");
-          return;
-        }
+      const res = await adminService.removeModerator(selectedSubjectId, mod.userId);
+      if (res.error) {
+        toast.error(res.error.message || "Failed to remove moderator.");
+        return;
       }
 
       toast.success(`Revoked moderation privileges for ${mod.fullName || "moderator"}.`);
