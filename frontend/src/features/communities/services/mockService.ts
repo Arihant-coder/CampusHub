@@ -17,6 +17,7 @@ import type {
   CommunityModerator,
   ProfileSearchResult,
   Report,
+  ModerationLogEntry,
 } from "./types";
 import type { UserRole } from "@/shared/user";
 
@@ -612,6 +613,45 @@ let mockReports: Report[] = [
     updatedAt: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
     reporterName: "Alex Chen",
     reporterHandle: "alex_chen",
+  },
+];
+
+let mockModerationLogs: ModerationLogEntry[] = [
+  {
+    id: "log-1",
+    subjectId: "cs301",
+    subjectName: "Database Management Systems",
+    actor: "mock-admin-uuid",
+    actorHandle: "sarah_vance",
+    actorName: "Dr. Sarah Vance",
+    target: "morgan_t",
+    action: "assign_moderator",
+    details: { subject: "cs301", role: "moderator" },
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(),
+  },
+  {
+    id: "log-2",
+    subjectId: "cs301",
+    subjectName: "Database Management Systems",
+    actor: "mock-moderator-uuid",
+    actorHandle: "morgan_t",
+    actorName: "Morgan Taylor",
+    target: "note-1",
+    action: "approve_note",
+    details: { title: "Unit 1 Lecture Slides", category: "Unit wise" },
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+  },
+  {
+    id: "log-3",
+    subjectId: "cs301",
+    subjectName: "Database Management Systems",
+    actor: "mock-moderator-uuid",
+    actorHandle: "morgan_t",
+    actorName: "Morgan Taylor",
+    target: "rep-1",
+    action: "resolve_report",
+    details: { status: "resolved", action_taken: "dismissed" },
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
   },
 ];
 
@@ -1219,8 +1259,38 @@ export const mockCommunitiesService: CommunitiesService = {
         resolvedBy: "mock-admin-uuid",
         updatedAt: new Date().toISOString(),
       };
+      mockModerationLogs.unshift({
+        id: `log-${Date.now()}`,
+        subjectId: mockReports[idx].subjectId,
+        subjectName: "Database Management Systems",
+        actor: "mock-admin-uuid",
+        actorHandle: "sarah_vance",
+        actorName: "Dr. Sarah Vance",
+        target: reportId,
+        action: `resolve_report_${status}`,
+        details: { reportId, status },
+        createdAt: new Date().toISOString(),
+      });
     }
     return { data: true, error: null };
+  },
+
+  async getModerationLogs(subjectId?: string): Promise<Result<ModerationLogEntry[]>> {
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    let result = [...mockModerationLogs];
+    if (subjectId && subjectId !== "all") {
+      result = result.filter((l) => l.subjectId === subjectId);
+    }
+    return { data: result, error: null };
+  },
+
+  async getDocumentUrl(storagePath: string): Promise<Result<string>> {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Provide a valid demo PDF URL or object preview for offline testing
+    return {
+      data: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      error: null,
+    };
   },
 
   async getStorageUsage(): Promise<

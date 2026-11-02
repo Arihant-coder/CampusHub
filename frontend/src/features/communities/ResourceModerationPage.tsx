@@ -24,10 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { communitiesService } from "./services";
-import type { ResourceNote, ResourceCategory, ResourceType, SubjectForum, Report } from "./services/types";
+import type { ResourceNote, ResourceCategory, ResourceType, SubjectForum, Report, ModerationLogEntry } from "./services/types";
 import { toast } from "sonner";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/auth-context";
 
 export const ResourceModerationPage: React.FC = () => {
@@ -35,12 +35,16 @@ export const ResourceModerationPage: React.FC = () => {
   const { user } = useAuth();
   const { subjectId: urlSubjectId } = useParams<{ subjectId?: string }>();
 
-  const [activeTab, setActiveTab] = useState<"resources" | "reports">("resources");
+  const [activeTab, setActiveTab] = useState<"resources" | "reports" | "audit">("resources");
   const [pendingNotes, setPendingNotes] = useState<ResourceNote[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [moderationLogs, setModerationLogs] = useState<ModerationLogEntry[]>([]);
   const [forums, setForums] = useState<SubjectForum[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
+
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
+  const [noteToReject, setNoteToReject] = useState<ResourceNote | null>(null);
 
   // Filters & Sorting state
   const [selectedSubject, setSelectedSubject] = useState<string>(urlSubjectId || "all");
@@ -58,7 +62,7 @@ export const ResourceModerationPage: React.FC = () => {
   const loadPending = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [pendingRes, forumsRes, reportsRes] = await Promise.all([
+      const [pendingRes, forumsRes, reportsRes, logsRes] = await Promise.all([
         communitiesService.getPendingResources
           ? communitiesService.getPendingResources(selectedSubject === "all" ? undefined : selectedSubject)
           : Promise.resolve({ data: [] as ResourceNote[], error: null }),
@@ -66,6 +70,9 @@ export const ResourceModerationPage: React.FC = () => {
         communitiesService.getReports
           ? communitiesService.getReports(selectedSubject === "all" ? undefined : selectedSubject)
           : Promise.resolve({ data: [] as Report[], error: null }),
+        communitiesService.getModerationLogs
+          ? communitiesService.getModerationLogs(selectedSubject === "all" ? undefined : selectedSubject)
+          : Promise.resolve({ data: [] as ModerationLogEntry[], error: null }),
       ]);
 
       if (pendingRes.data) {
@@ -96,6 +103,16 @@ export const ResourceModerationPage: React.FC = () => {
       if (forumsRes.data) {
         setForums(forumsRes.data);
       }
+
+      if (logsRes.data) {
+        let filteredLogs = logsRes.data;
+        if (user && user.role !== "admin") {
+          filteredLogs = filteredLogs.filter(
+            (l) => l.subjectId && user.moderatedSubjectIds?.includes(l.subjectId)
+          );
+        }
+        setModerationLogs(filteredLogs);
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to load moderation queue.");
     } finally {
@@ -118,33 +135,28 @@ export const ResourceModerationPage: React.FC = () => {
     }
   };
 
-  const handleDeleteReportedContent = async (report: Report) => {
-    const isComment = report.targetType === "comment";
-    const label = isComment ? "comment" : report.targetType === "post" ? "post" : "resource";
-    if (
-      !window.confirm(
-        `Are you sure you want to permanently delete this ${label} and mark the report resolved?`
-      )
-    ) {
-      return;
-    }
+  const handleConfirmDeleteReportedContent = async () => {
+    if (!reportToDelete) return;
+    const isComment = reportToDelete.targetType === "comment";
+    const label = isComment ? "comment" : reportToDelete.targetType === "post" ? "post" : "resource";
 
     try {
-      setIsProcessingId(report.id);
+      setIsProcessingId(reportToDelete.id);
       if (isComment && communitiesService.deleteComment) {
-        await communitiesService.deleteComment(report.targetId);
-      } else if (report.targetType === "post" && communitiesService.deletePost) {
-        await communitiesService.deletePost(report.targetId);
-      } else if (report.targetType === "note" && communitiesService.deleteResource) {
-        await communitiesService.deleteResource(report.targetId, "");
+        await communitiesService.deleteComment(reportToDelete.targetId);
+      } else if (reportToDelete.targetType === "post" && communitiesService.deletePost) {
+        await communitiesService.deletePost(reportToDelete.targetId);
+      } else if (reportToDelete.targetType === "note" && communitiesService.deleteResource) {
+        await communitiesService.deleteResource(reportToDelete.targetId, "");
       }
 
       if (communitiesService.resolveReport) {
-        await communitiesService.resolveReport(report.id, "resolved");
+        await communitiesService.resolveReport(reportToDelete.id, "resolved");
       }
 
-      setReports((prev) => prev.filter((r) => r.id !== report.id));
+      setReports((prev) => prev.filter((r) => r.id !== reportToDelete.id));
       toast.success(`Reported ${label} deleted and report resolved.`);
+      setReportToDelete(null);
     } catch (err: any) {
       toast.error(err.message || `Failed to delete reported ${label}.`);
     } finally {
@@ -181,23 +193,22 @@ export const ResourceModerationPage: React.FC = () => {
   };
 
   // Handle Reject: deletes file from storage and marks record rejected, freeing user's personal quota
-  const handleReject = async (note: ResourceNote) => {
-    if (!window.confirm(`Are you sure you want to reject and discard "${note.title}"?`)) {
-      return;
-    }
+  const handleConfirmReject = async () => {
+    if (!noteToReject) return;
 
     try {
-      setIsProcessingId(note.id);
+      setIsProcessingId(noteToReject.id);
       if (communitiesService.rejectResource) {
-        const res = await communitiesService.rejectResource(note.id, note.storagePath);
+        const res = await communitiesService.rejectResource(noteToReject.id, noteToReject.storagePath);
         if (res.error) {
           toast.error(res.error.message || "Failed to reject resource.");
           return;
         }
       }
 
-      setPendingNotes((prev) => prev.filter((p) => p.id !== note.id));
-      toast.info(`"${note.title}" rejected and purged from storage.`);
+      setPendingNotes((prev) => prev.filter((p) => p.id !== noteToReject.id));
+      toast.success(`"${noteToReject.title}" rejected and deleted.`);
+      setNoteToReject(null);
     } catch (err: any) {
       toast.error(err.message || "An error occurred while rejecting.");
     } finally {
@@ -214,16 +225,16 @@ export const ResourceModerationPage: React.FC = () => {
 
     try {
       setOpeningId(note.id);
-      const { data, error } = await supabase.storage
-        .from("subject-notes")
-        .createSignedUrl(note.storagePath, 120);
+      const res = communitiesService.getDocumentUrl
+        ? await communitiesService.getDocumentUrl(note.storagePath)
+        : { data: null, error: { code: "UNSUPPORTED", message: "Preview unavailable" } };
 
-      if (error || !data?.signedUrl) {
-        toast.error(error?.message || "Document preview unavailable in current environment.");
+      if (res.error || !res.data) {
+        toast.error(res.error?.message || "Document preview unavailable in current environment.");
         return;
       }
 
-      window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+      window.open(res.data, "_blank", "noopener,noreferrer");
     } catch (err: any) {
       toast.error(err.message || "Failed to open document preview.");
     } finally {
@@ -340,7 +351,9 @@ export const ResourceModerationPage: React.FC = () => {
             <span className="text-xs font-normal text-muted-foreground">
               {activeTab === "reports"
                 ? `${reports.filter((r) => r.status === "pending").length} pending`
-                : `${pendingNotes.length} pending`}
+                : activeTab === "resources"
+                ? `${pendingNotes.length} pending`
+                : `${moderationLogs.length} events logged`}
             </span>
           </h1>
         </div>
@@ -379,6 +392,17 @@ export const ResourceModerationPage: React.FC = () => {
           }`}
         >
           Resources ({pendingNotes.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("audit")}
+          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
+            activeTab === "audit"
+              ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+              : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+          }`}
+        >
+          Audit Log ({moderationLogs.length})
         </button>
       </div>
 
@@ -563,7 +587,7 @@ export const ResourceModerationPage: React.FC = () => {
                             variant="destructive"
                             size="sm"
                             disabled={isProcessingId === report.id}
-                            onClick={() => handleDeleteReportedContent(report)}
+                            onClick={() => setReportToDelete(report)}
                             className="h-7 text-xs px-3 cursor-pointer shadow-xs"
                           >
                             Delete
@@ -656,7 +680,7 @@ export const ResourceModerationPage: React.FC = () => {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => handleReject(note)}
+                      onClick={() => setNoteToReject(note)}
                       disabled={isProcessing}
                       className="h-7 text-xs px-3 text-destructive hover:bg-destructive/10 border-destructive/30 cursor-pointer"
                     >
@@ -678,6 +702,119 @@ export const ResourceModerationPage: React.FC = () => {
           })}
         </div>
       )}
+
+      {/* 3. Audit Log Tab View */}
+      {activeTab === "audit" && (
+        <div className="space-y-3">
+          {moderationLogs.length === 0 ? (
+            <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
+              No moderation activity logged yet.
+            </div>
+          ) : (
+            <div className="rounded-xl border bg-card divide-y overflow-hidden shadow-xs">
+              {moderationLogs.map((log) => {
+                const actionBadgeClass =
+                  log.action.includes("approve")
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                    : log.action.includes("reject") || log.action.includes("delete")
+                    ? "bg-destructive/10 text-destructive border-destructive/20"
+                    : log.action.includes("assign")
+                    ? "bg-primary/10 text-primary border-primary/20"
+                    : "bg-muted text-muted-foreground border-border";
+
+                return (
+                  <div key={log.id} className="p-3.5 space-y-2 hover:bg-muted/30 transition-colors">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[10px] uppercase font-semibold tracking-wider px-2 py-0.5 rounded-full border ${actionBadgeClass}`}
+                        >
+                          {log.action.replace(/_/g, " ")}
+                        </span>
+                        {log.subjectId && (
+                          <span className="text-xs font-semibold text-foreground">
+                            {log.subjectName || log.subjectId.toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground">
+                        {new Date(log.createdAt).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span>
+                        Staff:{" "}
+                        <span className="font-medium text-foreground">
+                          {log.actorName || log.actorHandle || "Staff"}
+                        </span>
+                        {log.actorHandle && (
+                          <span className="ml-1 text-[11px] text-muted-foreground">
+                            (@{log.actorHandle})
+                          </span>
+                        )}
+                      </span>
+                      {log.target && (
+                        <>
+                          <span>•</span>
+                          <span>
+                            Target: <code className="font-mono text-[11px] text-foreground">{log.target}</code>
+                          </span>
+                        </>
+                      )}
+                    </div>
+
+                    {log.details && Object.keys(log.details).length > 0 && (
+                      <div className="text-[11px] font-mono bg-muted/50 rounded-md p-2 text-muted-foreground overflow-x-auto">
+                        {JSON.stringify(log.details, null, 2)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete Content & Resolve Report Confirmation */}
+      <ConfirmDialog
+        open={Boolean(reportToDelete)}
+        onOpenChange={(open) => !open && setReportToDelete(null)}
+        title="Delete Content & Resolve Report"
+        description={
+          reportToDelete ? (
+            <>
+              Are you sure you want to permanently delete this reported {reportToDelete.targetType} and mark the report resolved? This cannot be undone.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete & Resolve"
+        variant="destructive"
+        isLoading={Boolean(isProcessingId)}
+        onConfirm={handleConfirmDeleteReportedContent}
+      />
+
+      {/* Reject Resource Confirmation */}
+      <ConfirmDialog
+        open={Boolean(noteToReject)}
+        onOpenChange={(open) => !open && setNoteToReject(null)}
+        title="Reject Resource"
+        description={
+          noteToReject ? (
+            <>
+              Are you sure you want to reject <span className="font-semibold text-foreground">&ldquo;{noteToReject.title}&rdquo;</span>? The file will be purged from storage and removed from the queue.
+            </>
+          ) : undefined
+        }
+        confirmText="Reject & Discard"
+        variant="destructive"
+        isLoading={Boolean(isProcessingId)}
+        onConfirm={handleConfirmReject}
+      />
     </div>
   );
 };

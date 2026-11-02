@@ -136,12 +136,12 @@ export const authService = {
    * Sign-in handler using campus email and password.
    */
   async login(emailInput: string, password: string, isMock: boolean): Promise<Result<UserProfile>> {
-    const cleanEmail = emailInput.trim().toLowerCase();
+    const cleanIdentifier = emailInput.trim().toLowerCase();
 
-    if (!cleanEmail) {
+    if (!cleanIdentifier) {
       return {
         data: null,
-        error: { code: "VALIDATION", message: "Please enter your campus email." },
+        error: { code: "VALIDATION", message: "Please enter your campus email or username." },
       };
     }
 
@@ -149,8 +149,8 @@ export const authService = {
       // Check pre-configured mock accounts (by email or handle)
       const match = Object.values(MOCK_ACCOUNTS).find(
         (acc) =>
-          acc.email.toLowerCase() === cleanEmail ||
-          acc.profile.handle.toLowerCase() === cleanEmail
+          acc.email.toLowerCase() === cleanIdentifier ||
+          acc.profile.handle.toLowerCase() === cleanIdentifier
       );
 
       if (match) {
@@ -160,16 +160,21 @@ export const authService = {
             error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
-        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(match.profile));
-        return { data: match.profile, error: null };
+        sessionStorage.removeItem("campushub:just_registered");
+        const profile: UserProfile = {
+          ...match.profile,
+          privacyOnboardingCompleted: true,
+        };
+        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(profile));
+        return { data: profile, error: null };
       }
 
       // Check registered mock accounts
       const localUsers = this.getRegisteredMockUsers();
       const registeredMatch = localUsers.find(
         (u) =>
-          u.email.toLowerCase() === cleanEmail ||
-          u.handle.toLowerCase() === cleanEmail
+          u.email.toLowerCase() === cleanIdentifier ||
+          u.handle.toLowerCase() === cleanIdentifier
       );
 
       if (registeredMatch) {
@@ -179,8 +184,13 @@ export const authService = {
             error: { code: "UNAUTHENTICATED", message: "Invalid email or password." },
           };
         }
-        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(registeredMatch.profile));
-        return { data: registeredMatch.profile, error: null };
+        sessionStorage.removeItem("campushub:just_registered");
+        const profile: UserProfile = {
+          ...registeredMatch.profile,
+          privacyOnboardingCompleted: true,
+        };
+        localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(profile));
+        return { data: profile, error: null };
       }
 
       return {
@@ -189,10 +199,24 @@ export const authService = {
       };
     }
 
-    // Live Supabase Authentication strictly using email and password
+    // Live Supabase Authentication
     try {
+      let emailToAuth = cleanIdentifier;
+      if (!cleanIdentifier.includes("@")) {
+        const { data: resolvedEmail, error: rpcError } = await supabase.rpc("resolve_login_email", {
+          p_identifier: cleanIdentifier,
+        });
+        if (rpcError || !resolvedEmail) {
+          return {
+            data: null,
+            error: { code: "UNAUTHENTICATED", message: "Invalid email or password" },
+          };
+        }
+        emailToAuth = resolvedEmail;
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
+        email: emailToAuth,
         password,
       });
 
@@ -203,9 +227,21 @@ export const authService = {
         };
       }
 
+      sessionStorage.removeItem("campushub:just_registered");
       const profile = await this.getLiveProfile(data.user.id);
       if (profile) {
-        return { data: profile, error: null };
+        const existingProfile: UserProfile = {
+          ...profile,
+          privacyOnboardingCompleted: true,
+        };
+        if (!profile.privacyOnboardingCompleted) {
+          supabase
+            .from("profiles")
+            .update({ privacy_onboarding_completed: true })
+            .eq("id", data.user.id)
+            .then();
+        }
+        return { data: existingProfile, error: null };
       }
 
       // Fallback profile if row is still synchronizing
@@ -217,6 +253,8 @@ export const authService = {
           avatarUrl: data.user.user_metadata?.avatar_url || null,
           role: "student",
           createdAt: data.user.created_at,
+          isPrivate: false,
+          privacyOnboardingCompleted: true,
         },
         error: null,
       };
@@ -264,9 +302,12 @@ export const authService = {
         id: `mock-${cleanHandle}-uuid`,
         handle: cleanHandle,
         fullName: fullName.trim() || cleanHandle,
+        email: cleanEmail,
         avatarUrl: null,
         role: "student",
         createdAt: new Date().toISOString(),
+        isPrivate: false,
+        privacyOnboardingCompleted: false,
       };
 
       this.saveRegisteredMockUser({
@@ -276,6 +317,7 @@ export const authService = {
         profile: newMockProfile,
       });
 
+      sessionStorage.setItem("campushub:just_registered", "true");
       localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(newMockProfile));
       return { data: { ...newMockProfile, requiresVerification: false }, error: null };
     }
@@ -321,6 +363,9 @@ export const authService = {
       }
 
       const hasSession = Boolean(data.session);
+      if (hasSession) {
+        sessionStorage.setItem("campushub:just_registered", "true");
+      }
       const profile = await this.getLiveProfile(data.user.id);
       return {
         data: {
@@ -331,6 +376,8 @@ export const authService = {
             avatarUrl: null,
             role: "student",
             createdAt: data.user.created_at,
+            isPrivate: false,
+            privacyOnboardingCompleted: false,
           }),
           requiresVerification: !hasSession,
         },
@@ -405,6 +452,7 @@ export const authService = {
    * Log out from active mode.
    */
   async logout(isMock: boolean): Promise<void> {
+    sessionStorage.removeItem("campushub:just_registered");
     if (isMock) {
       localStorage.removeItem(MOCK_STORAGE_KEY);
     } else {
@@ -433,7 +481,7 @@ export const authService = {
   async getLiveProfile(userId: string): Promise<UserProfile | null> {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, handle, full_name, avatar_url, role, created_at")
+      .select("id, handle, full_name, avatar_url, role, created_at, is_private, privacy_onboarding_completed")
       .eq("id", userId)
       .maybeSingle();
 
@@ -446,6 +494,9 @@ export const authService = {
 
     const moderatedSubjectIds = (modRows || []).map((r: { subject_id: string }) => r.subject_id);
 
+    const { data: authData } = await supabase.auth.getUser();
+    const email = authData.user?.id === userId ? authData.user.email : undefined;
+
     return {
       id: data.id,
       handle: data.handle,
@@ -454,6 +505,68 @@ export const authService = {
       role: data.role as UserRole,
       createdAt: data.created_at,
       moderatedSubjectIds,
+      email,
+      isPrivate: data.is_private ?? false,
+      privacyOnboardingCompleted: data.privacy_onboarding_completed ?? true,
     };
+  },
+
+  /**
+   * Updates privacy preference (Public vs. Private profile) and marks onboarding as completed.
+   */
+  async updatePrivacySettings(
+    userId: string,
+    isPrivate: boolean,
+    isMock: boolean
+  ): Promise<Result<void>> {
+    if (isMock) {
+      const cached = localStorage.getItem(MOCK_STORAGE_KEY);
+      if (cached) {
+        try {
+          const profile = JSON.parse(cached) as UserProfile;
+          profile.isPrivate = isPrivate;
+          profile.privacyOnboardingCompleted = true;
+          localStorage.setItem(MOCK_STORAGE_KEY, JSON.stringify(profile));
+        } catch {
+          // ignore parsing error
+        }
+      }
+
+      // Also update in registered mock accounts if user is registered locally
+      const localUsers = this.getRegisteredMockUsers();
+      const userIdx = localUsers.findIndex((u) => u.profile.id === userId);
+      if (userIdx !== -1) {
+        localUsers[userIdx].profile.isPrivate = isPrivate;
+        localUsers[userIdx].profile.privacyOnboardingCompleted = true;
+        try {
+          localStorage.setItem(MOCK_REGISTERED_USERS_KEY, JSON.stringify(localUsers));
+        } catch {
+          // ignore
+        }
+      }
+
+      return { data: undefined, error: null };
+    }
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          is_private: isPrivate,
+          privacy_onboarding_completed: true,
+        })
+        .eq("id", userId);
+
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      return { data: undefined, error: null };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message || "Failed to update privacy settings." },
+      };
+    }
   },
 };

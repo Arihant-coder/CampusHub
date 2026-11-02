@@ -20,6 +20,8 @@ export const MOCK_ACCOUNTS: Record<string, MockAccount> = {
       role: "student",
       createdAt: "2026-09-01T08:00:00Z",
       moderatedSubjectIds: [],
+      isPrivate: false,
+      privacyOnboardingCompleted: true,
     },
   },
   moderator: {
@@ -35,6 +37,8 @@ export const MOCK_ACCOUNTS: Record<string, MockAccount> = {
       role: "student",
       createdAt: "2026-08-15T10:00:00Z",
       moderatedSubjectIds: ["cs301", "cs302", "dbms", "cn"],
+      isPrivate: false,
+      privacyOnboardingCompleted: true,
     },
   },
   admin: {
@@ -50,6 +54,8 @@ export const MOCK_ACCOUNTS: Record<string, MockAccount> = {
       role: "admin",
       createdAt: "2026-07-01T09:00:00Z",
       moderatedSubjectIds: [],
+      isPrivate: false,
+      privacyOnboardingCompleted: true,
     },
   },
 };

@@ -8,6 +8,9 @@ import { dashboardRoute } from "@/features/dashboard/routes";
 import { communitiesRoute } from "@/features/communities/routes";
 import { dailyQuizRoute } from "@/features/daily-quiz/routes";
 import { adminRoute } from "@/features/admin/routes";
+import { profileRoute } from "@/features/profile/routes";
+import { NotFoundPage } from "./pages/NotFoundPage";
+import { RootErrorBoundary } from "./components/ErrorBoundary";
 
 export const router = createBrowserRouter([
   ...authRoutes,
@@ -18,10 +21,12 @@ export const router = createBrowserRouter([
         <RootLayout />
       </ProtectedRoute>
     ),
+    errorElement: <RootErrorBoundary />,
     children: [
       dashboardRoute,
       communitiesRoute,
       adminRoute,
+      profileRoute,
       {
         path: "subjects",
         element: <SubjectWorkspaceLayout />,
@@ -31,6 +36,10 @@ export const router = createBrowserRouter([
         ],
       },
       dailyQuizRoute,
+      {
+        path: "*",
+        element: <NotFoundPage />,
+      },
     ],
   },
 ]);

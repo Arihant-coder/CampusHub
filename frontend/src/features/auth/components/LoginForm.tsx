@@ -110,7 +110,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     if (currentMode === "signin") {
       const trimmedId = identifier.trim();
       if (!trimmedId) {
-        setErrorMessage("Please enter your campus email.");
+        setErrorMessage("Please enter your campus email or username.");
         return;
       }
       if (!password) {
@@ -123,7 +123,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       setIsLoading(false);
 
       if (res.error) {
-        const message = res.error.message || "Invalid campus email or password. Please try again.";
+        const message = res.error.message || "Invalid campus email, username, or password. Please try again.";
         setErrorMessage(message);
         toast.error(message);
         return;
@@ -211,7 +211,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         </CardTitle>
         <CardDescription className="text-xs text-muted-foreground">
           {currentMode === "signin"
-            ? "Enter your campus email and password below"
+            ? "Enter your campus email or username below"
             : "Enter your university credentials to get started"}
         </CardDescription>
       </CardHeader>
@@ -309,14 +309,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               </div>
             </>
           ) : (
-            /* Sign In: Campus Email Field */
+            /* Sign In: Campus Email or Username Field */
             <div className="space-y-2">
-              <Label htmlFor="identifier">Campus Email</Label>
+              <Label htmlFor="identifier">Campus Email or Username</Label>
               <Input
                 id="identifier"
-                type="email"
-                placeholder="student@college.edu"
-                autoComplete="email"
+                type="text"
+                placeholder="student@college.edu or handle"
+                autoComplete="username"
                 value={identifier}
                 onChange={(e) => {
                   setIdentifier(e.target.value);

@@ -29,19 +29,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
-import { communitiesService } from "@/features/communities/services";
+import { adminService } from "./services";
 import type {
-  SubjectForum,
+  AdminSubject,
   CommunityModerator,
   ProfileSearchResult,
-} from "@/features/communities/services/types";
+} from "./services/types";
 
 export const ModeratorsAdminPage: React.FC = () => {
   const { user, refreshProfile } = useAuth();
 
-  const [subjects, setSubjects] = useState<SubjectForum[]>([]);
+  const [subjects, setSubjects] = useState<AdminSubject[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>("");
   const [moderators, setModerators] = useState<CommunityModerator[]>([]);
   const [isLoadingSubjects, setIsLoadingSubjects] = useState(true);
@@ -53,12 +54,13 @@ export const ModeratorsAdminPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState<string | null>(null);
   const [isRemoving, setIsRemoving] = useState<string | null>(null);
+  const [modToRemove, setModToRemove] = useState<CommunityModerator | null>(null);
 
   // 1. Load subjects catalogue
   useEffect(() => {
     let isMounted = true;
     setIsLoadingSubjects(true);
-    communitiesService.getSubjectForums().then((res) => {
+    adminService.getSubjects().then((res) => {
       if (!isMounted) return;
       if (res.data && res.data.length > 0) {
         setSubjects(res.data);
@@ -76,11 +78,9 @@ export const ModeratorsAdminPage: React.FC = () => {
     if (!subjectId) return;
     try {
       setIsLoadingModerators(true);
-      if (communitiesService.getCommunityModerators) {
-        const res = await communitiesService.getCommunityModerators(subjectId);
-        if (res.data) {
-          setModerators(res.data);
-        }
+      const res = await adminService.getCommunityModerators(subjectId);
+      if (res.data) {
+        setModerators(res.data);
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to load moderators.");
@@ -106,11 +106,9 @@ export const ModeratorsAdminPage: React.FC = () => {
     const timer = setTimeout(async () => {
       try {
         setIsSearching(true);
-        if (communitiesService.searchProfilesForAdmin) {
-          const res = await communitiesService.searchProfilesForAdmin(trimmed);
-          if (res.data) {
-            setSearchResults(res.data);
-          }
+        const res = await adminService.searchProfiles(trimmed);
+        if (res.data) {
+          setSearchResults(res.data);
         }
       } catch (err: any) {
         console.error("Profile search error:", err);
@@ -134,12 +132,10 @@ export const ModeratorsAdminPage: React.FC = () => {
 
     try {
       setIsAssigning(profile.id);
-      if (communitiesService.assignModerator) {
-        const res = await communitiesService.assignModerator(selectedSubjectId, profile.id);
-        if (res.error) {
-          toast.error(res.error.message || "Failed to assign moderator.");
-          return;
-        }
+      const res = await adminService.assignModerator(selectedSubjectId, profile.id);
+      if (res.error) {
+        toast.error(res.error.message || "Failed to assign moderator.");
+        return;
       }
 
       toast.success(`Assigned ${profile.fullName || "User"} as moderator.`);
@@ -161,33 +157,29 @@ export const ModeratorsAdminPage: React.FC = () => {
   };
 
   // 5. Remove moderator
-  const handleRemoveModerator = async (mod: CommunityModerator) => {
-    if (!selectedSubjectId) return;
-    if (
-      !window.confirm(
-        `Are you sure you want to revoke moderation privileges for ${mod.fullName || "this moderator"} in this community?`
-      )
-    ) {
-      return;
-    }
+  const handleRemoveModerator = (mod: CommunityModerator) => {
+    setModToRemove(mod);
+  };
+
+  const handleConfirmRemoveModerator = async () => {
+    if (!selectedSubjectId || !modToRemove) return;
 
     try {
-      setIsRemoving(mod.userId);
-      if (communitiesService.removeModerator) {
-        const res = await communitiesService.removeModerator(selectedSubjectId, mod.userId);
-        if (res.error) {
-          toast.error(res.error.message || "Failed to remove moderator.");
-          return;
-        }
+      setIsRemoving(modToRemove.userId);
+      const res = await adminService.removeModerator(selectedSubjectId, modToRemove.userId);
+      if (res.error) {
+        toast.error(res.error.message || "Failed to remove moderator.");
+        return;
       }
 
-      toast.success(`Revoked moderation privileges for ${mod.fullName || "moderator"}.`);
+      toast.success(`Revoked moderation privileges for ${modToRemove.fullName || "moderator"}.`);
       await loadModerators(selectedSubjectId);
 
       // If target is current user, refresh active profile
-      if (user?.id === mod.userId) {
+      if (user?.id === modToRemove.userId) {
         await refreshProfile();
       }
+      setModToRemove(null);
     } catch (err: any) {
       toast.error(err.message || "An error occurred while removing moderator.");
     } finally {
@@ -431,6 +423,27 @@ export const ModeratorsAdminPage: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(modToRemove)}
+        onOpenChange={(open) => !open && setModToRemove(null)}
+        title="Revoke Moderation Privileges"
+        description={
+          modToRemove ? (
+            <>
+              Are you sure you want to revoke moderation privileges for{" "}
+              <span className="font-semibold text-foreground">
+                {modToRemove.fullName || `@${modToRemove.handle}` || "this moderator"}
+              </span>{" "}
+              in this community?
+            </>
+          ) : undefined
+        }
+        confirmText="Revoke Privileges"
+        variant="destructive"
+        isLoading={Boolean(isRemoving)}
+        onConfirm={handleConfirmRemoveModerator}
+      />
     </div>
   );
 };

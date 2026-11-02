@@ -19,6 +19,7 @@ import type {
   CommunityModerator,
   ProfileSearchResult,
   Report,
+  ModerationLogEntry,
 } from "./types";
 import type { UserRole } from "@/shared/user";
 import { uploadCommunityImage } from "../utils/storageUpload";
@@ -80,7 +81,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       let query = supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role)")
         .eq("subject_id", subjectId);
 
       if (search && search.trim()) {
@@ -105,6 +106,13 @@ export const realCommunitiesService: CommunitiesService = {
           error: { code: "INTERNAL", message: error.message },
         };
       }
+
+      // Query subject moderators for dynamic authorRole assignment
+      const { data: modRows } = await supabase
+        .from("community_moderators")
+        .select("user_id")
+        .eq("subject_id", subjectId);
+      const modIds = new Set((modRows || []).map((m: any) => m.user_id));
 
       const user = (await supabase.auth.getUser()).data.user;
 
@@ -131,6 +139,11 @@ export const realCommunitiesService: CommunitiesService = {
         authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
+        authorRole: row.profiles?.role === "admin"
+          ? "admin"
+          : modIds.has(row.author_id)
+          ? "moderator"
+          : "student",
         title: row.title,
         body: row.body,
         images: row.images || [],
@@ -156,7 +169,7 @@ export const realCommunitiesService: CommunitiesService = {
     try {
       const { data: row, error } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role)")
         .eq("id", postId)
         .single();
 
@@ -165,6 +178,22 @@ export const realCommunitiesService: CommunitiesService = {
           data: null,
           error: { code: "NOT_FOUND", message: error?.message || "Post not found" },
         };
+      }
+
+      // Check author role dynamically
+      let authorRole: "admin" | "moderator" | "student" = "student";
+      if (row.profiles?.role === "admin") {
+        authorRole = "admin";
+      } else {
+        const { data: modCheck } = await supabase
+          .from("community_moderators")
+          .select("user_id")
+          .eq("subject_id", row.subject_id)
+          .eq("user_id", row.author_id)
+          .maybeSingle();
+        if (modCheck) {
+          authorRole = "moderator";
+        }
       }
 
       const user = (await supabase.auth.getUser()).data.user;
@@ -189,6 +218,7 @@ export const realCommunitiesService: CommunitiesService = {
         authorName: row.profiles?.full_name || "Student",
         authorHandle: row.profiles?.handle || "Anonymous",
         authorAvatarUrl: row.profiles?.avatar_url || null,
+        authorRole,
         title: row.title,
         body: row.body || "",
         images: row.images || [],
@@ -237,30 +267,50 @@ export const realCommunitiesService: CommunitiesService = {
       // 2. Fetch matching posts
       const { data: postRows } = await supabase
         .from("posts")
-        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url), subjects(name)")
+        .select("*, profiles!posts_author_id_fkey(handle, full_name, avatar_url, role), subjects(name)")
         .ilike("title", `%${clean}%`)
         .order("created_at", { ascending: false })
         .limit(10);
 
-      const posts: (Post & { forumName?: string })[] = (postRows || []).map((row: any) => ({
-        id: row.id,
-        subjectId: row.subject_id,
-        forumName: row.subjects?.name || "Community",
-        authorId: row.author_id,
-        authorName: row.profiles?.full_name || "Student",
-        authorHandle: row.profiles?.handle || "Anonymous",
-        authorAvatarUrl: row.profiles?.avatar_url || null,
-        title: row.title,
-        body: row.body || "",
-        images: row.images || [],
-        imageUrl: row.images?.[0] || null,
-        upvotes: row.upvotes ?? 0,
-        downvotes: row.downvotes ?? 0,
-        replyCount: row.reply_count ?? 0,
-        hotScore: row.hot_score,
-        createdAt: row.created_at,
-        currentUserVote: null,
-      }));
+      // Check community_moderators for the matched posts' author + subject pairs
+      let moderatorPairSet = new Set<string>();
+      if (postRows && postRows.length > 0) {
+        const authorIds = Array.from(new Set(postRows.map((r: any) => r.author_id)));
+        const subjectIds = Array.from(new Set(postRows.map((r: any) => r.subject_id)));
+        const { data: modRows } = await supabase
+          .from("community_moderators")
+          .select("user_id, subject_id")
+          .in("user_id", authorIds)
+          .in("subject_id", subjectIds);
+
+        if (modRows) {
+          moderatorPairSet = new Set(modRows.map((m: any) => `${m.user_id}:${m.subject_id}`));
+        }
+      }
+
+      const posts: (Post & { forumName?: string })[] = (postRows || []).map((row: any) => {
+        const isMod = moderatorPairSet.has(`${row.author_id}:${row.subject_id}`);
+        return {
+          id: row.id,
+          subjectId: row.subject_id,
+          forumName: row.subjects?.name || "Community",
+          authorId: row.author_id,
+          authorName: row.profiles?.full_name || "Student",
+          authorHandle: row.profiles?.handle || "Anonymous",
+          authorAvatarUrl: row.profiles?.avatar_url || null,
+          authorRole: row.profiles?.role === "admin" ? "admin" : isMod ? "moderator" : "student",
+          title: row.title,
+          body: row.body || "",
+          images: row.images || [],
+          imageUrl: row.images?.[0] || null,
+          upvotes: row.upvotes ?? 0,
+          downvotes: row.downvotes ?? 0,
+          replyCount: row.reply_count ?? 0,
+          hotScore: row.hot_score,
+          createdAt: row.created_at,
+          currentUserVote: null,
+        };
+      });
 
       return {
         data: { forums, posts },
@@ -1102,94 +1152,147 @@ export const realCommunitiesService: CommunitiesService = {
         return { data: null, error: { code: "INTERNAL", message: error.message } };
       }
 
-      const reports: Report[] = await Promise.all(
-        (data || []).map(async (row: any) => {
-          let targetContent: Report["targetContent"] = undefined;
-          try {
-            if (row.target_type === "post") {
-              const { data: postRow } = await supabase
-                .from("posts")
-                .select("id, title, body, subject_id, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
-                .eq("id", row.target_id)
-                .maybeSingle();
+      const rows = data || [];
 
-              if (postRow) {
-                targetContent = {
-                  title: postRow.title,
-                  body: postRow.body,
-                  authorHandle: (postRow as any).profiles?.handle,
-                  authorName: (postRow as any).profiles?.full_name,
-                  authorAvatarUrl: (postRow as any).profiles?.avatar_url,
-                  postId: postRow.id,
-                  subjectId: postRow.subject_id,
-                  exists: true,
-                };
-              } else {
-                targetContent = { exists: false };
-              }
-            } else if (row.target_type === "comment") {
-              const { data: commentRow } = await supabase
-                .from("comments")
-                .select("id, body, post_id, subject_id, profiles!comments_author_id_fkey(handle, full_name, avatar_url), posts(title)")
-                .eq("id", row.target_id)
-                .maybeSingle();
-
-              if (commentRow) {
-                targetContent = {
-                  title: (commentRow as any).posts?.title,
-                  body: commentRow.body,
-                  authorHandle: (commentRow as any).profiles?.handle,
-                  authorName: (commentRow as any).profiles?.full_name,
-                  authorAvatarUrl: (commentRow as any).profiles?.avatar_url,
-                  postId: commentRow.post_id,
-                  subjectId: commentRow.subject_id,
-                  exists: true,
-                };
-              } else {
-                targetContent = { exists: false };
-              }
-            } else if (row.target_type === "note") {
-              const { data: noteRow } = await supabase
-                .from("notes")
-                .select("id, title, subject_id, profiles!notes_user_id_fkey(handle, full_name)")
-                .eq("id", row.target_id)
-                .maybeSingle();
-
-              if (noteRow) {
-                targetContent = {
-                  title: noteRow.title,
-                  authorHandle: (noteRow as any).profiles?.handle,
-                  authorName: (noteRow as any).profiles?.full_name,
-                  subjectId: noteRow.subject_id,
-                  exists: true,
-                };
-              } else {
-                targetContent = { exists: false };
-              }
-            }
-          } catch {
-            // graceful fallback
-          }
-
-          return {
-            id: row.id,
-            subjectId: row.subject_id,
-            reporterId: row.reporter_id,
-            targetType: row.target_type,
-            targetId: row.target_id,
-            reason: row.reason,
-            status: row.status,
-            resolvedBy: row.resolved_by,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            reporterName: row.profiles?.full_name || "Anonymous",
-            reporterHandle: row.profiles?.handle || "anonymous",
-            targetContent,
-          };
-        })
+      // Batch fetch target content to eliminate N+1 round trips
+      const postIds = Array.from(
+        new Set(rows.filter((r: any) => r.target_type === "post").map((r: any) => r.target_id))
+      );
+      const commentIds = Array.from(
+        new Set(rows.filter((r: any) => r.target_type === "comment").map((r: any) => r.target_id))
+      );
+      const noteIds = Array.from(
+        new Set(rows.filter((r: any) => r.target_type === "note").map((r: any) => r.target_id))
       );
 
+      const [postsRes, commentsRes, notesRes] = await Promise.all([
+        postIds.length > 0
+          ? supabase
+              .from("posts")
+              .select("id, title, body, subject_id, profiles!posts_author_id_fkey(handle, full_name, avatar_url)")
+              .in("id", postIds)
+          : Promise.resolve({ data: [] }),
+        commentIds.length > 0
+          ? supabase
+              .from("comments")
+              .select("id, body, post_id, subject_id, profiles!comments_author_id_fkey(handle, full_name, avatar_url), posts(title)")
+              .in("id", commentIds)
+          : Promise.resolve({ data: [] }),
+        noteIds.length > 0
+          ? supabase
+              .from("notes")
+              .select("id, title, subject_id, profiles!notes_user_id_fkey(handle, full_name)")
+              .in("id", noteIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const postsMap = new Map((postsRes.data || []).map((p: any) => [p.id, p]));
+      const commentsMap = new Map((commentsRes.data || []).map((c: any) => [c.id, c]));
+      const notesMap = new Map((notesRes.data || []).map((n: any) => [n.id, n]));
+
+      const reports: Report[] = rows.map((row: any) => {
+        let targetContent: Report["targetContent"] = undefined;
+        if (row.target_type === "post") {
+          const postRow = postsMap.get(row.target_id);
+          if (postRow) {
+            targetContent = {
+              title: postRow.title,
+              body: postRow.body,
+              authorHandle: postRow.profiles?.handle,
+              authorName: postRow.profiles?.full_name,
+              authorAvatarUrl: postRow.profiles?.avatar_url,
+              postId: postRow.id,
+              subjectId: postRow.subject_id,
+              exists: true,
+            };
+          } else {
+            targetContent = { exists: false };
+          }
+        } else if (row.target_type === "comment") {
+          const commentRow = commentsMap.get(row.target_id);
+          if (commentRow) {
+            targetContent = {
+              title: commentRow.posts?.title,
+              body: commentRow.body,
+              authorHandle: commentRow.profiles?.handle,
+              authorName: commentRow.profiles?.full_name,
+              authorAvatarUrl: commentRow.profiles?.avatar_url,
+              postId: commentRow.post_id,
+              subjectId: commentRow.subject_id,
+              exists: true,
+            };
+          } else {
+            targetContent = { exists: false };
+          }
+        } else if (row.target_type === "note") {
+          const noteRow = notesMap.get(row.target_id);
+          if (noteRow) {
+            targetContent = {
+              title: noteRow.title,
+              authorHandle: noteRow.profiles?.handle,
+              authorName: noteRow.profiles?.full_name,
+              subjectId: noteRow.subject_id,
+              exists: true,
+            };
+          } else {
+            targetContent = { exists: false };
+          }
+        }
+
+        return {
+          id: row.id,
+          subjectId: row.subject_id,
+          reporterId: row.reporter_id,
+          targetType: row.target_type,
+          targetId: row.target_id,
+          reason: row.reason,
+          status: row.status,
+          resolvedBy: row.resolved_by,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          reporterName: row.profiles?.full_name || "Anonymous",
+          reporterHandle: row.profiles?.handle || "anonymous",
+          targetContent,
+        };
+      });
+
       return { data: reports, error: null };
+    } catch (err: unknown) {
+      return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getModerationLogs(subjectId?: string): Promise<Result<ModerationLogEntry[]>> {
+    try {
+      let query = supabase
+        .from("moderation_log")
+        .select("*, profiles!moderation_log_actor_fkey(handle, full_name), subjects(name)")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (subjectId && subjectId !== "all") {
+        query = query.eq("subject_id", subjectId);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        return { data: null, error: { code: "INTERNAL", message: error.message } };
+      }
+
+      const logs: ModerationLogEntry[] = (data || []).map((row: any) => ({
+        id: row.id,
+        subjectId: row.subject_id,
+        subjectName: row.subjects?.name,
+        actor: row.actor,
+        actorHandle: row.profiles?.handle || "staff",
+        actorName: row.profiles?.full_name || "Staff Member",
+        target: row.target,
+        action: row.action,
+        details: row.details || {},
+        createdAt: row.created_at,
+      }));
+
+      return { data: logs, error: null };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
     }
@@ -1264,6 +1367,28 @@ export const realCommunitiesService: CommunitiesService = {
       return { data: true, error: null };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async getDocumentUrl(storagePath: string): Promise<Result<string>> {
+    try {
+      const { data, error } = await supabase.storage
+        .from("subject-notes")
+        .createSignedUrl(storagePath, 120);
+
+      if (error || !data?.signedUrl) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error?.message || "Failed to generate document download link." },
+        };
+      }
+
+      return { data: data.signedUrl, error: null };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message },
+      };
     }
   },
 

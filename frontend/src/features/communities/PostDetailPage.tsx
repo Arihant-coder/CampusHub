@@ -34,6 +34,8 @@ import { ImageCarousel } from "./components/ImageCarousel";
 import { FormattedText } from "./components/FormattedText";
 import { RichContentEditor } from "./components/RichContentEditor";
 import { CommentTree } from "./components/CommentTree";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ReportDialog } from "./components/ReportDialog";
 import { toast } from "sonner";
 import { communitiesService } from "./services";
 import { processCommunityImage } from "./utils/imagePipeline";
@@ -69,50 +71,45 @@ export default function PostDetailPage() {
     toast.success("Post link copied to clipboard!");
   };
 
-  const handleReportPost = async () => {
-    if (!post) return;
-    try {
-      if (communitiesService.createReport) {
-        await communitiesService.createReport({
-          subjectId: post.subjectId,
-          targetType: "post",
-          targetId: post.id,
-          reason: "Reported as inappropriate or violating community guidelines.",
-        });
-      }
-      toast.success("Post reported to community moderators.");
-    } catch {
-      toast.error("Failed to submit report.");
-    }
-  };
+  const [showDeletePostConfirm, setShowDeletePostConfirm] = useState(false);
+  const [commentToDeleteId, setCommentToDeleteId] = useState<string | null>(null);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
+  const [isDeletingComment, setIsDeletingComment] = useState(false);
 
   const canDeletePost = Boolean(
     user && post && (user.id === post.authorId || canModerate(user, post.subjectId))
   );
+  const canReportPost = Boolean(user && post && user.id !== post.authorId);
 
-  const handleDeletePost = async () => {
-    if (!post || !window.confirm(`Are you sure you want to delete "${post.title}"?`)) return;
+  const handleConfirmDeletePost = async () => {
+    if (!post) return;
     try {
+      setIsDeletingPost(true);
       if (communitiesService.deletePost) {
         await communitiesService.deletePost(post.id, post.images);
       }
       toast.success("Post deleted.");
+      setShowDeletePostConfirm(false);
       navigate(`/communities/${post.subjectId}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete post.");
+    } finally {
+      setIsDeletingPost(false);
     }
   };
 
-  const handleDeleteComment = async (commentId: string) => {
-    if (!window.confirm("Are you sure you want to delete this comment?")) return;
+  const handleConfirmDeleteComment = async () => {
+    if (!commentToDeleteId) return;
     try {
+      setIsDeletingComment(true);
       if (communitiesService.deleteComment) {
-        await communitiesService.deleteComment(commentId);
+        await communitiesService.deleteComment(commentToDeleteId);
       }
       setComments((prev) => {
         const removeRecursive = (list: Comment[]): Comment[] => {
           return list
-            .filter((c) => c.id !== commentId)
+            .filter((c) => c.id !== commentToDeleteId)
             .map((c) => ({
               ...c,
               children: c.children ? removeRecursive(c.children) : [],
@@ -121,9 +118,16 @@ export default function PostDetailPage() {
         return removeRecursive(prev);
       });
       toast.success("Comment deleted.");
+      setCommentToDeleteId(null);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete comment.");
+    } finally {
+      setIsDeletingComment(false);
     }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    setCommentToDeleteId(commentId);
   };
 
   // Top-level comment box state
@@ -377,8 +381,23 @@ export default function PostDetailPage() {
                   >
                     {forum ? `${forum.code} • ${forum.name}` : "Community"}
                   </button>
-                  <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate">
-                    <span className="font-medium text-foreground/80">{post.authorName || post.authorHandle || "Anonymous"}</span>
+                  <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground truncate flex-wrap">
+                    <span
+                      onClick={() => {
+                        if (post.authorHandle) navigate(`/u/${post.authorHandle}`);
+                      }}
+                      className="font-medium text-foreground/80 hover:underline cursor-pointer"
+                    >
+                      {post.authorName || "Anonymous"}
+                    </span>
+                    {post.authorHandle && (
+                      <span
+                        onClick={() => navigate(`/u/${post.authorHandle}`)}
+                        className="text-muted-foreground hover:underline cursor-pointer"
+                      >
+                        @{post.authorHandle}
+                      </span>
+                    )}
                     {isAuthorModerator && (
                       <Badge
                         variant="outline"
@@ -413,18 +432,20 @@ export default function PostDetailPage() {
                       <Share2 className="h-3.5 w-3.5" />
                       <span>Copy Link</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleReportPost}
-                      className="cursor-pointer gap-2 text-xs"
-                    >
-                      <Flag className="h-3.5 w-3.5" />
-                      <span>Report Post</span>
-                    </DropdownMenuItem>
+                    {canReportPost && (
+                      <DropdownMenuItem
+                        onClick={() => setShowReportDialog(true)}
+                        className="cursor-pointer gap-2 text-xs"
+                      >
+                        <Flag className="h-3.5 w-3.5" />
+                        <span>Report Post</span>
+                      </DropdownMenuItem>
+                    )}
                     {canDeletePost && (
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={handleDeletePost}
+                          onClick={() => setShowDeletePostConfirm(true)}
                           className="cursor-pointer gap-2 text-xs text-destructive focus:text-destructive focus:bg-destructive/10"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -669,6 +690,45 @@ export default function PostDetailPage() {
           </article>
         )}
       </div>
+
+      {post && (
+        <>
+          <ConfirmDialog
+            open={showDeletePostConfirm}
+            onOpenChange={setShowDeletePostConfirm}
+            title="Delete Post"
+            description={
+              <>
+                Are you sure you want to delete <span className="font-semibold text-foreground">&ldquo;{post.title}&rdquo;</span>? This cannot be undone.
+              </>
+            }
+            confirmText="Delete"
+            variant="destructive"
+            isLoading={isDeletingPost}
+            onConfirm={handleConfirmDeletePost}
+          />
+
+          <ConfirmDialog
+            open={Boolean(commentToDeleteId)}
+            onOpenChange={(open) => !open && setCommentToDeleteId(null)}
+            title="Delete Comment"
+            description="Are you sure you want to delete this comment? This cannot be undone."
+            confirmText="Delete"
+            variant="destructive"
+            isLoading={isDeletingComment}
+            onConfirm={handleConfirmDeleteComment}
+          />
+
+          <ReportDialog
+            open={showReportDialog}
+            onOpenChange={setShowReportDialog}
+            subjectId={post.subjectId}
+            targetType="post"
+            targetId={post.id}
+            targetTitle={post.title}
+          />
+        </>
+      )}
     </div>
   );
 }

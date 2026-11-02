@@ -195,6 +195,7 @@ export default function CommunitiesPage() {
                 searchQuery={communitySearchQuery}
                 onSearchChange={setCommunitySearchQuery}
                 onClearSearch={() => setCommunitySearchQuery("")}
+                onDeletePost={(deletedId) => setPosts((prev) => prev.filter((p) => p.id !== deletedId))}
               />
             </TabsContent>
 
