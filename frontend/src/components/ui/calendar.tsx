@@ -218,8 +218,6 @@ function CalendarDayButton({
 
   const { className: _rdpClassName, ...restProps } = props as any
 
-  const hasEvent = Boolean((modifiers as any).hasEvent)
-  const isTest = Boolean((modifiers as any).isTest)
   const isStreak = Boolean((modifiers as any).streak)
 
   return (
@@ -230,7 +228,7 @@ function CalendarDayButton({
       data-day={day.date.toLocaleDateString()}
       {...restProps}
       className={cn(
-        "relative h-8 w-8 sm:h-9 sm:w-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex flex-col items-center justify-center transition-colors cursor-pointer",
+        "h-8 w-8 sm:h-9 sm:w-9 mx-auto p-0 font-normal text-xs sm:text-sm rounded-lg flex items-center justify-center transition-colors cursor-pointer",
         modifiers.selected
           ? "bg-primary text-primary-foreground font-semibold hover:bg-primary hover:text-primary-foreground shadow-xs"
           : isStreak
@@ -247,20 +245,6 @@ function CalendarDayButton({
       )}
     >
       <span className="leading-none">{children}</span>
-
-      {/* Visual Indicator Dot for tests / events */}
-      {hasEvent && !modifiers.outside && (
-        <span
-          className={cn(
-            "absolute bottom-1 h-1.5 w-1.5 rounded-full transition-transform",
-            modifiers.selected
-              ? "bg-primary-foreground"
-              : isTest
-                ? "bg-rose-500 ring-1 ring-rose-400 shadow-xs"
-                : "bg-amber-500 ring-1 ring-amber-400 shadow-xs"
-          )}
-        />
-      )}
     </Button>
   )
 }

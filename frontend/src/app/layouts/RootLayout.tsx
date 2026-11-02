@@ -21,7 +21,9 @@ import {
   ShieldAlert,
   Mail,
   User,
+  Flame,
 } from "lucide-react";
+import { getAppStreak } from "@/lib/streak";
 import { useTheme } from "next-themes";
 
 import { Button } from "@/components/ui/button";
@@ -99,6 +101,7 @@ function RootLayoutContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const streak = getAppStreak();
   const displayEmail =
     user?.email ||
     (user?.handle === "morgan_t"
@@ -403,6 +406,15 @@ function RootLayoutContent() {
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             {/* Feature Custom Header Actions */}
             {actions}
+
+            {/* Global Streak Counter Badge in Main App Header */}
+            <div
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400 shadow-2xs select-none cursor-default hover:bg-emerald-500/20 transition-colors"
+              title={`${streak.currentStreak} consecutive days on CampusHub!`}
+            >
+              <Flame className="size-3.5 fill-emerald-500 text-emerald-500 animate-pulse" />
+              <span>{streak.currentStreak}d Streak</span>
+            </div>
 
             {/* Theme Selector (Light, Dark, System) */}
             <DropdownMenu>
