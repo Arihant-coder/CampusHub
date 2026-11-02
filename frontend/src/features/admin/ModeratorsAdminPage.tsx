@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-context";
 import { adminService } from "./services";
@@ -53,6 +54,7 @@ export const ModeratorsAdminPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isAssigning, setIsAssigning] = useState<string | null>(null);
   const [isRemoving, setIsRemoving] = useState<string | null>(null);
+  const [modToRemove, setModToRemove] = useState<CommunityModerator | null>(null);
 
   // 1. Load subjects catalogue
   useEffect(() => {
@@ -155,31 +157,29 @@ export const ModeratorsAdminPage: React.FC = () => {
   };
 
   // 5. Remove moderator
-  const handleRemoveModerator = async (mod: CommunityModerator) => {
-    if (!selectedSubjectId) return;
-    if (
-      !window.confirm(
-        `Are you sure you want to revoke moderation privileges for ${mod.fullName || "this moderator"} in this community?`
-      )
-    ) {
-      return;
-    }
+  const handleRemoveModerator = (mod: CommunityModerator) => {
+    setModToRemove(mod);
+  };
+
+  const handleConfirmRemoveModerator = async () => {
+    if (!selectedSubjectId || !modToRemove) return;
 
     try {
-      setIsRemoving(mod.userId);
-      const res = await adminService.removeModerator(selectedSubjectId, mod.userId);
+      setIsRemoving(modToRemove.userId);
+      const res = await adminService.removeModerator(selectedSubjectId, modToRemove.userId);
       if (res.error) {
         toast.error(res.error.message || "Failed to remove moderator.");
         return;
       }
 
-      toast.success(`Revoked moderation privileges for ${mod.fullName || "moderator"}.`);
+      toast.success(`Revoked moderation privileges for ${modToRemove.fullName || "moderator"}.`);
       await loadModerators(selectedSubjectId);
 
       // If target is current user, refresh active profile
-      if (user?.id === mod.userId) {
+      if (user?.id === modToRemove.userId) {
         await refreshProfile();
       }
+      setModToRemove(null);
     } catch (err: any) {
       toast.error(err.message || "An error occurred while removing moderator.");
     } finally {
@@ -423,6 +423,27 @@ export const ModeratorsAdminPage: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(modToRemove)}
+        onOpenChange={(open) => !open && setModToRemove(null)}
+        title="Revoke Moderation Privileges"
+        description={
+          modToRemove ? (
+            <>
+              Are you sure you want to revoke moderation privileges for{" "}
+              <span className="font-semibold text-foreground">
+                {modToRemove.fullName || `@${modToRemove.handle}` || "this moderator"}
+              </span>{" "}
+              in this community?
+            </>
+          ) : undefined
+        }
+        confirmText="Revoke Privileges"
+        variant="destructive"
+        isLoading={Boolean(isRemoving)}
+        onConfirm={handleConfirmRemoveModerator}
+      />
     </div>
   );
 };

@@ -102,6 +102,19 @@ export interface Report {
   targetContent?: ReportTargetContent;
 }
 
+export interface ModerationLogEntry {
+  id: string;
+  subjectId: string | null;
+  subjectName?: string;
+  actor: string;
+  actorHandle?: string;
+  actorName?: string;
+  target?: string | null;
+  action: string;
+  details?: Record<string, any>;
+  createdAt: string;
+}
+
 export interface GlobalSearchResult {
   forums: SubjectForum[];
   posts: (Post & { forumName?: string })[];
@@ -149,6 +162,7 @@ export interface CommunitiesService {
   searchProfilesForAdmin?(query: string): Promise<Result<ProfileSearchResult[]>>;
   setUserRole?(userId: string, role: UserRole): Promise<Result<void>>;
   getReports?(subjectId?: string): Promise<Result<Report[]>>;
+  getModerationLogs?(subjectId?: string): Promise<Result<ModerationLogEntry[]>>;
   createReport?(data: {
     subjectId: string;
     targetType: "post" | "comment" | "note" | "user";

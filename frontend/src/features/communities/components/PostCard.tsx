@@ -26,6 +26,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { ReportDialog } from "./ReportDialog";
 import { ImageCarousel } from "./ImageCarousel";
 import { useAuth } from "@/lib/auth-context";
 import { canModerate } from "@/shared/user";
@@ -78,10 +80,13 @@ export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCar
   const navigate = useNavigate();
   const { user } = useAuth();
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
 
   const canDelete = Boolean(
     user && (user.id === post.authorId || canModerate(user, post.subjectId))
   );
+  const canReport = Boolean(user && user.id !== post.authorId);
 
   const handleOpenPost = () => {
     navigate(`/communities/${post.subjectId}/post/${post.id}`);
@@ -101,36 +106,28 @@ export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCar
     toast.success("Post link copied to clipboard.");
   };
 
-  const handleReport = async (e: React.MouseEvent) => {
+  const handleOpenReport = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      if (communitiesService.createReport) {
-        await communitiesService.createReport({
-          subjectId: post.subjectId,
-          targetType: "post",
-          targetId: post.id,
-          reason: "Reported as inappropriate or violating community guidelines.",
-        });
-      }
-      toast.success("Post reported to community moderators.");
-    } catch {
-      toast.error("Failed to submit report.");
-    }
+    setShowReportDialog(true);
   };
 
-  const handleDelete = async (e: React.MouseEvent) => {
+  const handleOpenDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to delete "${post.title}"?`)) return;
+    setShowDeleteConfirm(true);
+  };
 
+  const handleConfirmDelete = async () => {
     try {
       setIsDeleting(true);
       if (communitiesService.deletePost) {
         await communitiesService.deletePost(post.id, post.images);
       }
       toast.success("Post deleted.");
+      setShowDeleteConfirm(false);
       onDeletePost?.(post.id);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete post.");
+    } finally {
       setIsDeleting(false);
     }
   };
@@ -228,15 +225,17 @@ export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCar
                 <Copy className="mr-2 h-3.5 w-3.5" />
                 <span>Copy Link</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleReport} className="cursor-pointer">
-                <AlertCircle className="mr-2 h-3.5 w-3.5" />
-                <span>Report Post</span>
-              </DropdownMenuItem>
+              {canReport && (
+                <DropdownMenuItem onClick={handleOpenReport} className="cursor-pointer">
+                  <AlertCircle className="mr-2 h-3.5 w-3.5" />
+                  <span>Report Post</span>
+                </DropdownMenuItem>
+              )}
               {canDelete && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    onClick={handleDelete}
+                    onClick={handleOpenDelete}
                     className="cursor-pointer text-destructive focus:text-destructive"
                   >
                     <Trash2 className="mr-2 h-3.5 w-3.5" />
@@ -330,6 +329,30 @@ export function PostCard({ post, onVote, highlightQuery, onDeletePost }: PostCar
           <span>{post.replyCount} comments</span>
         </button>
       </div>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Post"
+        description={
+          <>
+            Are you sure you want to delete <span className="font-semibold text-foreground">&ldquo;{post.title}&rdquo;</span>? This action cannot be undone.
+          </>
+        }
+        confirmText="Delete"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+      />
+
+      <ReportDialog
+        open={showReportDialog}
+        onOpenChange={setShowReportDialog}
+        subjectId={post.subjectId}
+        targetType="post"
+        targetId={post.id}
+        targetTitle={post.title}
+      />
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { DocumentViewer } from "./components/DocumentViewer";
 import { ResourceTree } from "./components/ResourceTree";
 import { ViewerTabs } from "./components/ViewerTabs";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { subjectViewerService, type SubjectNote } from "./services";
 
 export default function SubjectViewerPage() {
@@ -20,6 +21,8 @@ export default function SubjectViewerPage() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const active = useMemo(
     () => tabs.find((note) => note.id === activeId) ?? null,
@@ -110,20 +113,32 @@ export default function SubjectViewerPage() {
     toast.success("Note saved successfully.");
   };
 
-  const remove = async () => {
+  const remove = () => {
     if (!active || active.tag !== "Private") return;
-    const confirmDelete = window.confirm(`Delete "${active.title}"? This cannot be undone.`);
-    if (!confirmDelete) return;
+    setShowDeleteConfirm(true);
+  };
 
-    const result = await subjectViewerService.deleteTextNote(active.id);
-    if (result.error) {
-      return toast.error(result.error.message);
+  const handleConfirmDelete = async () => {
+    if (!active || active.tag !== "Private") return;
+
+    try {
+      setIsDeleting(true);
+      const result = await subjectViewerService.deleteTextNote(active.id);
+      if (result.error) {
+        toast.error(result.error.message);
+        return;
+      }
+
+      const noteId = active.id;
+      setNotes((current) => current.filter((n) => n.id !== noteId));
+      close(noteId);
+      toast.success("Note deleted.");
+      setShowDeleteConfirm(false);
+    } catch (err: any) {
+      toast.error(err.message || "Failed to delete note.");
+    } finally {
+      setIsDeleting(false);
     }
-
-    const noteId = active.id;
-    setNotes((current) => current.filter((n) => n.id !== noteId));
-    close(noteId);
-    toast.success("Note deleted.");
   };
 
   return (
@@ -154,6 +169,23 @@ export default function SubjectViewerPage() {
           />
         </div>
       </section>
+
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Private Note"
+        description={
+          active ? (
+            <>
+              Are you sure you want to delete <span className="font-semibold text-foreground">&ldquo;{active.title}&rdquo;</span>? This cannot be undone.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete Note"
+        variant="destructive"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

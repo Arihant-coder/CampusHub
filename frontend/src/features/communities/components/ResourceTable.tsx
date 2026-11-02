@@ -8,6 +8,7 @@ import React, { useState } from "react";
 import { FileText, Download, BookOpen, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { ResourceNote } from "../services/types";
 import { communitiesService } from "../services";
 import { toast } from "sonner";
@@ -30,6 +31,7 @@ export function ResourceTable({
   const { user } = useAuth();
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<ResourceNote | null>(null);
 
   const formatTime = (isoString: string) => {
     const diffMs = Date.now() - new Date(isoString).getTime();
@@ -65,13 +67,14 @@ export function ResourceTable({
     }
   };
 
-  const handleDelete = async (item: ResourceNote) => {
-    if (!onDeleteResource || !window.confirm(`Delete "${item.title}"?`)) return;
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || !onDeleteResource) return;
 
     try {
-      setDeletingId(item.id);
-      await onDeleteResource(item.id, item.storagePath);
+      setDeletingId(itemToDelete.id);
+      await onDeleteResource(itemToDelete.id, itemToDelete.storagePath);
       toast.success("Document deleted.");
+      setItemToDelete(null);
     } catch (err: any) {
       toast.error(err.message || "Failed to delete document.");
     } finally {
@@ -167,7 +170,7 @@ export function ResourceTable({
                     className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0 cursor-pointer"
                     title="Delete Resource"
                     disabled={deletingId === item.id}
-                    onClick={() => handleDelete(item)}
+                    onClick={() => setItemToDelete(item)}
                   >
                     {deletingId === item.id ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -181,6 +184,23 @@ export function ResourceTable({
           </div>
         );
       })}
+
+      <ConfirmDialog
+        open={Boolean(itemToDelete)}
+        onOpenChange={(open) => !open && setItemToDelete(null)}
+        title="Delete Document"
+        description={
+          itemToDelete ? (
+            <>
+              Are you sure you want to delete <span className="font-semibold text-foreground">&ldquo;{itemToDelete.title}&rdquo;</span>? This cannot be undone.
+            </>
+          ) : undefined
+        }
+        confirmText="Delete"
+        variant="destructive"
+        isLoading={Boolean(deletingId)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }

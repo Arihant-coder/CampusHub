@@ -152,7 +152,39 @@ export const mockProfileService: ProfileService = {
 
   async getUserPosts(authorId: string) {
     // Return sample mock posts or posts created by author
-    const posts = SAMPLE_POSTS.filter((p) => p.authorId === authorId || p.authorHandle === authorId);
+    let posts = SAMPLE_POSTS.filter((p) => p.authorId === authorId || p.authorHandle === authorId);
+    if (posts.length === 0) {
+      const activeRaw = localStorage.getItem(MOCK_STORAGE_KEY);
+      if (activeRaw) {
+        try {
+          const parsed = JSON.parse(activeRaw) as UserProfile;
+          if (parsed.id === authorId || parsed.handle === authorId) {
+            posts = [
+              {
+                id: `post-welcome-${parsed.id}`,
+                subjectId: "cs301",
+                authorId: parsed.id,
+                authorHandle: parsed.handle,
+                authorName: parsed.fullName || "Student",
+                authorAvatarUrl: parsed.avatarUrl,
+                authorRole: parsed.role === "admin" ? "admin" : "student",
+                title: "Welcome to CampusHub! (Introductory Post)",
+                body: `Hello campus community! I'm ${parsed.fullName} (@${parsed.handle}). Looking forward to collaborating on lecture notes, PYQ solutions, and discussion topics here.`,
+                imageUrl: null,
+                images: [],
+                upvotes: 2,
+                downvotes: 0,
+                replyCount: 0,
+                createdAt: parsed.createdAt || new Date().toISOString(),
+                currentUserVote: null,
+              },
+            ];
+          }
+        } catch {
+          // ignore parsing error
+        }
+      }
+    }
     return { data: posts, error: null };
   },
 

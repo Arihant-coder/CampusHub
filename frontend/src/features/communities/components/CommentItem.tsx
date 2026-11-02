@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ReportDialog } from "./ReportDialog";
 import { FormattedText } from "./FormattedText";
 import { RichContentEditor } from "./RichContentEditor";
 import { processCommunityImage } from "../utils/imagePipeline";
@@ -36,7 +37,6 @@ import { useImageViewer } from "@/lib/image-viewer-context";
 import { useAuth } from "@/lib/auth-context";
 import { canModerate } from "@/shared/user";
 import { toast } from "sonner";
-import { communitiesService } from "../services";
 import type { Comment } from "../services/types";
 
 // Reddit-style crisp circular minus icon [⊖]
@@ -103,6 +103,7 @@ export function CommentItem({
   const { user } = useAuth();
   const { openImageViewer } = useImageViewer();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [replyImages, setReplyImages] = useState<string[]>([]);
@@ -119,6 +120,7 @@ export function CommentItem({
       user &&
       (user.id === comment.authorId || canModerate(user, effectiveSubjectId))
   );
+  const canReportComment = Boolean(user && user.id !== comment.authorId);
 
   // 12-level depth ceiling check (0-indexed depths 0..11 = 12 total levels)
   const isMaxDepth = depth >= (maxDepth - 1);
@@ -235,9 +237,30 @@ export function CommentItem({
             <RedditPlusIcon className="h-4 w-4" />
           </div>
 
-          <span className="font-semibold text-foreground group-hover/collapsed:underline">
-            {comment.authorName || comment.authorHandle || "Anonymous"}
+          <span
+            onClick={(e) => {
+              if (comment.authorHandle) {
+                e.stopPropagation();
+                navigate(`/u/${comment.authorHandle}`);
+              }
+            }}
+            className={`font-semibold text-foreground ${
+              comment.authorHandle ? "hover:underline cursor-pointer" : ""
+            }`}
+          >
+            {comment.authorName || "Anonymous"}
           </span>
+          {comment.authorHandle && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/u/${comment.authorHandle}`);
+              }}
+              className="text-[11px] text-muted-foreground hover:underline cursor-pointer"
+            >
+              @{comment.authorHandle}
+            </span>
+          )}
           {isAuthorModerator && (
             <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded px-1 py-0.2">
               MOD
@@ -435,27 +458,15 @@ export function CommentItem({
               <Copy className="h-3.5 w-3.5" />
               <span>Copy Text</span>
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={async () => {
-                try {
-                  if (communitiesService.createReport) {
-                    await communitiesService.createReport({
-                      subjectId: effectiveSubjectId || "cs301",
-                      targetType: "comment",
-                      targetId: comment.id,
-                      reason: "Reported as inappropriate or violating community guidelines.",
-                    });
-                  }
-                  toast.success("Comment reported to community moderators.");
-                } catch {
-                  toast.error("Failed to submit report.");
-                }
-              }}
-              className="cursor-pointer gap-2 text-xs"
-            >
-              <Flag className="h-3.5 w-3.5" />
-              <span>Report</span>
-            </DropdownMenuItem>
+            {canReportComment && (
+              <DropdownMenuItem
+                onClick={() => setShowReportDialog(true)}
+                className="cursor-pointer gap-2 text-xs"
+              >
+                <Flag className="h-3.5 w-3.5" />
+                <span>Report</span>
+              </DropdownMenuItem>
+            )}
             {canDeleteComment && (
               <>
                 <DropdownMenuSeparator />
@@ -589,6 +600,15 @@ export function CommentItem({
           ))}
         </div>
       )}
+
+      <ReportDialog
+        open={showReportDialog}
+        onOpenChange={setShowReportDialog}
+        subjectId={effectiveSubjectId || "cs301"}
+        targetType="comment"
+        targetId={comment.id}
+        targetTitle={comment.body ? (comment.body.length > 50 ? `${comment.body.slice(0, 50)}...` : comment.body) : undefined}
+      />
     </div>
   );
 }
