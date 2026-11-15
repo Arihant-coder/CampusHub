@@ -22,6 +22,10 @@ export const authRoutes: RouteObject[] = [
     element: <LoginPage initialMode="verify" />,
   },
   {
+    path: "/forgot-password",
+    element: <LoginPage initialMode="forgot" />,
+  },
+  {
     path: "/auth/callback",
     element: <AuthCallbackPage />,
   },

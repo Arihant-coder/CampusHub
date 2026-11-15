@@ -101,7 +101,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     }
   }, [controlledMode]);
 
-  const currentMode = controlledMode || internalMode;
+  const currentMode = internalMode;
 
   const handleSetMode = (nextMode: "signin" | "signup" | "verify" | "forgot", keepEmail?: string) => {
     setInternalMode(nextMode);

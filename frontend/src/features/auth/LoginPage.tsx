@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-context";
 import type { UserProfile } from "@/shared/user";
 
 interface LoginPageProps {
-  initialMode?: "signin" | "signup" | "verify";
+  initialMode?: "signin" | "signup" | "verify" | "forgot";
 }
 
 export default function LoginPage({ initialMode }: LoginPageProps) {
@@ -22,16 +22,17 @@ export default function LoginPage({ initialMode }: LoginPageProps) {
 
   // Derive active mode directly from pathname, search params, or initial props
   const searchParams = new URLSearchParams(location.search);
-  const queryMode = searchParams.get("mode") as "signin" | "signup" | "verify" | null;
+  const queryMode = searchParams.get("mode") as "signin" | "signup" | "verify" | "forgot" | null;
+  const isForgotPath = location.pathname.includes("/forgot");
   const isSignupPath = location.pathname.includes("/signup");
   const isVerifyPath = location.pathname.includes("/verify-email") || location.pathname.includes("/verify");
-  const mode: "signin" | "signup" | "verify" =
-    queryMode || (isVerifyPath ? "verify" : isSignupPath ? "signup" : (initialMode || "signin"));
+  const mode: "signin" | "signup" | "verify" | "forgot" =
+    queryMode || (isForgotPath ? "forgot" : isVerifyPath ? "verify" : isSignupPath ? "signup" : (initialMode || "signin"));
   const emailParam = searchParams.get("email") || "";
 
   const rawDestination = (location.state as any)?.from?.pathname || "/";
   const destination =
-    rawDestination === "/login" || rawDestination === "/signup" || rawDestination === "/verify-email"
+    rawDestination === "/login" || rawDestination === "/signup" || rawDestination === "/verify-email" || rawDestination === "/forgot-password"
       ? "/"
       : rawDestination;
 
@@ -48,14 +49,15 @@ export default function LoginPage({ initialMode }: LoginPageProps) {
   };
 
   const handleModeChange = (newMode: "signin" | "signup" | "verify" | "forgot", email?: string) => {
-    if (newMode === "forgot") return;
     const search = email ? `?email=${encodeURIComponent(email)}` : "";
     const targetPath =
-      newMode === "signup"
-        ? `/signup${search}`
-        : newMode === "verify"
-          ? `/verify-email${search}`
-          : `/login${search}`;
+      newMode === "forgot"
+        ? `/forgot-password${search}`
+        : newMode === "signup"
+          ? `/signup${search}`
+          : newMode === "verify"
+            ? `/verify-email${search}`
+            : `/login${search}`;
     if (location.pathname + location.search !== targetPath) {
       navigate(targetPath, { replace: true });
     }
