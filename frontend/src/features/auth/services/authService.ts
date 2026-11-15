@@ -416,6 +416,97 @@ export const authService = {
   },
 
   /**
+   * Request password reset instructions via email.
+   */
+  async requestPasswordReset(identifier: string, isMock: boolean): Promise<Result<boolean>> {
+    const cleanId = (identifier || "").trim().toLowerCase();
+    if (!cleanId) {
+      return {
+        data: null,
+        error: { code: "VALIDATION", message: "Email or username is required." },
+      };
+    }
+
+    if (isMock) {
+      return { data: true, error: null };
+    }
+
+    try {
+      let targetEmail = cleanId;
+
+      // If user provided handle (e.g. "alex_chen" or "@alex_chen"), resolve to email first
+      if (!cleanId.includes("@")) {
+        const rawHandle = cleanId.startsWith("@") ? cleanId.slice(1) : cleanId;
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("handle", rawHandle)
+          .maybeSingle();
+
+        if (profile) {
+          const { data: resolvedEmail } = await supabase.rpc("resolve_login_email", {
+            p_identifier: rawHandle,
+          });
+          if (resolvedEmail) {
+            targetEmail = resolvedEmail;
+          }
+        }
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
+        redirectTo: `${window.location.origin}/auth/callback?type=recovery`,
+      });
+
+      if (error) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error.message || "Failed to send password reset email." },
+        };
+      }
+
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message || "Network error while requesting password reset." },
+      };
+    }
+  },
+
+  /**
+   * Update the user's password once an authenticated/recovery session exists.
+   */
+  async updatePassword(newPassword: string, isMock: boolean): Promise<Result<boolean>> {
+    const cleanPassword = (newPassword || "").trim();
+    if (cleanPassword.length < 6) {
+      return {
+        data: null,
+        error: { code: "VALIDATION", message: "Password must be at least 6 characters." },
+      };
+    }
+
+    if (isMock) {
+      return { data: true, error: null };
+    }
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: cleanPassword });
+      if (error) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error.message || "Failed to update password." },
+        };
+      }
+      return { data: true, error: null };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message || "Network error while updating password." },
+      };
+    }
+  },
+
+  /**
    * Auto-login helper based on VITE_MOCK_ROLE.
    */
   getAutoMockUser(mockRoleEnv?: string): UserProfile | null {

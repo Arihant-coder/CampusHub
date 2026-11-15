@@ -47,7 +47,8 @@ export default function LoginPage({ initialMode }: LoginPageProps) {
     navigate(destination, { replace: true });
   };
 
-  const handleModeChange = (newMode: "signin" | "signup" | "verify", email?: string) => {
+  const handleModeChange = (newMode: "signin" | "signup" | "verify" | "forgot", email?: string) => {
+    if (newMode === "forgot") return;
     const search = email ? `?email=${encodeURIComponent(email)}` : "";
     const targetPath =
       newMode === "signup"

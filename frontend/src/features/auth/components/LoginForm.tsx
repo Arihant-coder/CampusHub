@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useRef } from "react";
-import { Loader2, Check, AlertCircle, Mail, RefreshCw, ArrowLeft, CheckCircle2 } from "lucide-react";
+import { Loader2, Check, AlertCircle, Mail, RefreshCw, ArrowLeft, CheckCircle2, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,8 +18,8 @@ import type { UserProfile } from "@/shared/user";
 import { toast } from "sonner";
 
 interface LoginFormProps {
-  mode?: "signin" | "signup" | "verify";
-  onModeChange?: (mode: "signin" | "signup" | "verify", email?: string) => void;
+  mode?: "signin" | "signup" | "verify" | "forgot";
+  onModeChange?: (mode: "signin" | "signup" | "verify" | "forgot", email?: string) => void;
   initialEmail?: string;
   isMock: boolean;
   onSuccess: (profile: UserProfile) => void;
@@ -33,12 +33,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   onSuccess,
 }) => {
   const formRef = useRef<HTMLFormElement>(null);
-  const [internalMode, setInternalMode] = useState<"signin" | "signup" | "verify">(
+  const [internalMode, setInternalMode] = useState<"signin" | "signup" | "verify" | "forgot">(
     controlledMode || "signin"
   );
 
   // Sign-in identifier (accepts either username or email)
   const [identifier, setIdentifier] = useState(initialEmail || "");
+
+  // Forgot password identifier
+  const [forgotIdentifier, setForgotIdentifier] = useState(initialEmail || "");
+  const [resetSent, setResetSent] = useState(false);
 
   // Sign-up specific fields
   const [handle, setHandle] = useState("");
@@ -99,13 +103,38 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   const currentMode = controlledMode || internalMode;
 
-  const handleSetMode = (nextMode: "signin" | "signup" | "verify", keepEmail?: string) => {
+  const handleSetMode = (nextMode: "signin" | "signup" | "verify" | "forgot", keepEmail?: string) => {
     setInternalMode(nextMode);
     onModeChange?.(nextMode);
-    if (nextMode !== "verify") {
+    if (nextMode !== "verify" && nextMode !== "forgot") {
       resetFormInputs(keepEmail);
     }
     setErrorMessage(null);
+  };
+
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = forgotIdentifier.trim();
+    if (!clean) return;
+
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const res = await authService.requestPasswordReset(clean, isMock);
+      if (res.error) {
+        setErrorMessage(res.error.message);
+        toast.error(res.error.message);
+      } else {
+        setResetSent(true);
+        toast.success("Password reset instructions sent! Please check your email.");
+      }
+    } catch (err: any) {
+      const msg = err.message || "Failed to request password reset.";
+      setErrorMessage(msg);
+      toast.error(msg);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Debounced handle for real-time validation & availability check
@@ -381,6 +410,107 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     );
   }
 
+  // Dedicated View for Forgot Password
+  if (currentMode === "forgot") {
+    return (
+      <Card className="w-full shadow-sm border bg-card">
+        <CardHeader className="space-y-2 text-center pb-3">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary shadow-sm">
+            <KeyRound className="h-6 w-6" />
+          </div>
+          <div>
+            <CardTitle className="text-xl font-semibold tracking-tight">
+              Reset your password
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Enter your campus email or username to receive password reset instructions.
+            </CardDescription>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-4 pt-1">
+          {resetSent ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border/70 bg-muted/40 p-3.5 text-xs text-muted-foreground space-y-2">
+                <p className="font-semibold text-foreground flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                  Check your inbox
+                </p>
+                <p className="text-[11px] leading-relaxed">
+                  If an account exists for <strong className="text-foreground">{forgotIdentifier}</strong>, we have sent a password reset link. Please check your spam folder if you do not see it within a few minutes.
+                </p>
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full text-xs font-semibold cursor-pointer"
+                onClick={() => {
+                  setResetSent(false);
+                  handleSetMode("signin");
+                }}
+              >
+                <ArrowLeft className="mr-2 h-3.5 w-3.5" />
+                Back to sign in
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleForgotSubmit} className="space-y-4">
+              {errorMessage && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3 text-xs text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label htmlFor="forgot-identifier">Campus Email or Username</Label>
+                <Input
+                  id="forgot-identifier"
+                  type="text"
+                  placeholder="student@campushub.edu or @username"
+                  value={forgotIdentifier}
+                  onChange={(e) => {
+                    setForgotIdentifier(e.target.value);
+                    if (errorMessage) setErrorMessage(null);
+                  }}
+                  required
+                  disabled={isLoading}
+                  autoFocus
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isLoading || !forgotIdentifier.trim()}
+                className="w-full text-xs font-semibold cursor-pointer"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Sending Reset Link…
+                  </>
+                ) : (
+                  "Send Reset Link"
+                )}
+              </Button>
+
+              <div className="text-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => handleSetMode("signin")}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                >
+                  Remembered your password? <span className="font-semibold text-primary underline underline-offset-4">Sign in</span>
+                </button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="w-full shadow-sm border bg-card">
       <CardHeader className="space-y-1.5 text-center pb-4">
@@ -533,16 +663,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
               {currentMode === "signin" && (
-                <a
-                  href="#forgot"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    toast.info("Password reset instructions will be sent to your account's email.");
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMessage(null);
+                    setResetSent(false);
+                    setForgotIdentifier(identifier);
+                    handleSetMode("forgot");
                   }}
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline cursor-pointer"
                 >
                   Forgot password?
-                </a>
+                </button>
               )}
             </div>
             <Input
