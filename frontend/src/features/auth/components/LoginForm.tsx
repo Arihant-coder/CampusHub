@@ -49,6 +49,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const [email, setEmail] = useState(initialEmail || "");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   // Verification state
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string>(initialEmail || "");
@@ -87,6 +88,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     setEmail(keepEmail || "");
     setFullName("");
     setPassword("");
+    setConfirmPassword("");
     setHandleStatus({ available: null });
     formRef.current?.reset();
   };
@@ -259,6 +261,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       }
       if (!currentPassword || currentPassword.length < 6) {
         setErrorMessage("Password must be at least 6 characters.");
+        return;
+      }
+      if (currentPassword !== confirmPassword) {
+        setErrorMessage("Passwords do not match.");
         return;
       }
 
@@ -693,6 +699,27 @@ export const LoginForm: React.FC<LoginFormProps> = ({
               className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
             />
           </div>
+
+          {currentMode === "signup" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="Re-enter your password"
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (errorMessage) setErrorMessage(null);
+                }}
+                required
+                disabled={isLoading}
+                aria-invalid={Boolean(errorMessage)}
+                className={errorMessage ? "border-destructive focus-visible:ring-destructive" : ""}
+              />
+            </div>
+          )}
 
           <Button
             type="submit"
