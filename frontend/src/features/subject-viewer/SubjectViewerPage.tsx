@@ -25,7 +25,6 @@ interface DraftNote {
 
 interface CachedDocUrl {
   url: string;
-  blobUrl?: string;
   fetchedAt: number;
 }
 
@@ -83,17 +82,6 @@ export default function SubjectViewerPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [hasDirtyDrafts]);
 
-  // Clean up object URLs on page unmount
-  useEffect(() => {
-    return () => {
-      Object.values(docUrls).forEach((item) => {
-        if (item.blobUrl) {
-          URL.revokeObjectURL(item.blobUrl);
-        }
-      });
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Load notes tree whenever the active subjectId changes
   useEffect(() => {
     let isMounted = true;
@@ -125,9 +113,19 @@ export default function SubjectViewerPage() {
     };
   }, [subjectId]);
 
-  // Lazy on-demand signed URL retrieval with in-memory Blob caching for PDFs
+  // Lazy on-demand signed URL retrieval for PDFs
   useEffect(() => {
-    if (!active || active.tag === "Private" || !active.storagePath) return;
+    if (!active || active.tag === "Private" || (!active.storagePath && !active.contentUrl)) return;
+
+    if (active.contentUrl && !docUrls[active.id]) {
+      setDocUrls((prev) => ({
+        ...prev,
+        [active.id]: { url: active.contentUrl!, fetchedAt: Date.now() },
+      }));
+      return;
+    }
+
+    if (!active.storagePath) return;
 
     const cached = docUrls[active.id];
     const now = Date.now();
@@ -139,52 +137,24 @@ export default function SubjectViewerPage() {
     let isMounted = true;
     setLoadingDocUrl(true);
 
-    subjectViewerService.getDocumentUrl(active.storagePath).then(async ({ data, error }) => {
+    subjectViewerService.getDocumentUrl(active.storagePath).then(({ data, error }) => {
       if (!isMounted) return;
+      setLoadingDocUrl(false);
       if (error || !data) {
-        setLoadingDocUrl(false);
         toast.error(error?.message ?? "Could not load document preview.");
         return;
       }
 
-      try {
-        // Fetch the PDF blob once and create an in-memory object URL.
-        // This caches the PDF in RAM so switching tabs or remounting never re-downloads from Supabase.
-        const res = await fetch(data);
-        if (!res.ok) throw new Error("Stream fetch failed");
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-
-        if (!isMounted) {
-          URL.revokeObjectURL(blobUrl);
-          return;
-        }
-
-        setLoadingDocUrl(false);
-        setDocUrls((prev) => {
-          if (prev[active.id]?.blobUrl) {
-            URL.revokeObjectURL(prev[active.id].blobUrl!);
-          }
-          return {
-            ...prev,
-            [active.id]: { url: data, blobUrl, fetchedAt: Date.now() },
-          };
-        });
-      } catch {
-        if (isMounted) {
-          setLoadingDocUrl(false);
-          setDocUrls((prev) => ({
-            ...prev,
-            [active.id]: { url: data, fetchedAt: Date.now() },
-          }));
-        }
-      }
+      setDocUrls((prev) => ({
+        ...prev,
+        [active.id]: { url: data, fetchedAt: Date.now() },
+      }));
     });
 
     return () => {
       isMounted = false;
     };
-  }, [active?.id, active?.storagePath, active?.tag]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.storagePath, active?.contentUrl, active?.tag]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTitleChange = (noteId: string, newTitle: string) => {
     const targetNote = notes.find((n) => n.id === noteId);
@@ -444,7 +414,7 @@ export default function SubjectViewerPage() {
               const tabContent = draft?.content ?? tab.content ?? "";
               const tabIsDirty = draft?.isDirty ?? false;
               const tabDoc = docUrls[tab.id];
-              const activeUrl = tabDoc?.blobUrl || tabDoc?.url || tab.contentUrl;
+              const activeUrl = tabDoc?.url || tab.contentUrl;
 
               return (
                 <div
