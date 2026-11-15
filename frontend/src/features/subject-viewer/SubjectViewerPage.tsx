@@ -15,7 +15,12 @@ import { HeaderTabs, HeaderSidebarOffset } from "@/lib/header-context";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePersistentToggle } from "@/lib/use-persistent-toggle";
 import { useResizable } from "@/lib/use-resizable";
-import { subjectViewerService, type SubjectNote } from "./services";
+import {
+  subjectViewerService,
+  type SubjectNote,
+  getCachedDocumentBlobUrl,
+  invalidateCachedDocument,
+} from "./services";
 
 interface DraftNote {
   title: string;
@@ -113,7 +118,7 @@ export default function SubjectViewerPage() {
     };
   }, [subjectId]);
 
-  // Lazy on-demand signed URL retrieval for PDFs
+  // Lazy on-demand signed URL retrieval with persistent browser cache for PDFs
   useEffect(() => {
     if (!active || active.tag === "Private" || (!active.storagePath && !active.contentUrl)) return;
 
@@ -129,7 +134,7 @@ export default function SubjectViewerPage() {
 
     const cached = docUrls[active.id];
     const now = Date.now();
-    // Reuse cached URL if fetched less than 50 minutes ago (1-hour TTL)
+    // Reuse in-memory URL if fetched less than 50 minutes ago
     if (cached && now - cached.fetchedAt < 50 * 60 * 1000) {
       return;
     }
@@ -137,24 +142,34 @@ export default function SubjectViewerPage() {
     let isMounted = true;
     setLoadingDocUrl(true);
 
-    subjectViewerService.getDocumentUrl(active.storagePath).then(({ data, error }) => {
-      if (!isMounted) return;
-      setLoadingDocUrl(false);
-      if (error || !data) {
-        toast.error(error?.message ?? "Could not load document preview.");
-        return;
-      }
+    const storagePath = active.storagePath;
+    const version = active.createdAt;
 
-      setDocUrls((prev) => ({
-        ...prev,
-        [active.id]: { url: data, fetchedAt: Date.now() },
-      }));
-    });
+    getCachedDocumentBlobUrl(storagePath, version, async () => {
+      const { data, error } = await subjectViewerService.getDocumentUrl(storagePath);
+      if (error || !data) {
+        throw new Error(error?.message ?? "Could not load document preview.");
+      }
+      return data;
+    })
+      .then((url) => {
+        if (!isMounted) return;
+        setLoadingDocUrl(false);
+        setDocUrls((prev) => ({
+          ...prev,
+          [active.id]: { url, fetchedAt: Date.now() },
+        }));
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        setLoadingDocUrl(false);
+        toast.error(err.message || "Could not load document preview.");
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [active?.id, active?.storagePath, active?.contentUrl, active?.tag]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active?.id, active?.storagePath, active?.contentUrl, active?.tag, active?.createdAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleTitleChange = (noteId: string, newTitle: string) => {
     const targetNote = notes.find((n) => n.id === noteId);
@@ -246,6 +261,14 @@ export default function SubjectViewerPage() {
       const { [id]: _, ...rest } = prev;
       return rest;
     });
+    // Revoke object URL from memory if closed tab was using an active blob URL
+    if (docUrls[id]?.url?.startsWith("blob:")) {
+      URL.revokeObjectURL(docUrls[id].url);
+      setDocUrls((prev) => {
+        const { [id]: _, ...rest } = prev;
+        return rest;
+      });
+    }
   };
 
   const create = async () => {
@@ -323,6 +346,9 @@ export default function SubjectViewerPage() {
         return;
       }
 
+      if (noteToDelete?.storagePath) {
+        invalidateCachedDocument(noteToDelete.storagePath);
+      }
       setNotes((current) => current.filter((n) => n.id !== targetId));
       close(targetId);
       setDrafts((prev) => {
