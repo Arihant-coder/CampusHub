@@ -111,7 +111,7 @@ function RootLayoutContent() {
       : user?.handle === "alex_chen"
       ? "student@campushub.edu"
       : undefined);
-  const { actions, title: customTitle, center } = useHeader();
+  const { actions, title: customTitle, center, tabs, sidebarOffset, isSidebarOffsetDragging } = useHeader();
 
   const { setTheme, theme, resolvedTheme } = useTheme();
 
@@ -416,35 +416,78 @@ function RootLayoutContent() {
       {/* Main Content Area */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
         {/* Top Header */}
-        <header className="flex h-14 items-center justify-between gap-2 sm:gap-4 border-b px-2 sm:px-4 lg:px-6 bg-background min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setIsSidebarOpen((previous) => !previous)}
-              aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
+        <header
+          className={`flex h-14 items-center justify-between border-b bg-background min-w-0 ${
+            isSubjectWorkspace
+              ? "px-0 gap-0"
+              : "px-2 sm:px-4 lg:px-6 gap-2 sm:gap-4"
+          }`}
+        >
+          <div className="flex items-center h-full min-w-0 flex-1">
+            <div
+              style={
+                sidebarOffset > 0
+                  ? { width: `${sidebarOffset}px` }
+                  : undefined
+              }
+              className={`flex items-center h-full px-2 sm:px-3 gap-2 shrink-0 ${
+                isSidebarOffsetDragging ? "transition-none" : "transition-[width] duration-200 ease-in-out"
+              } overflow-hidden ${
+                sidebarOffset > 0 ? "border-r border-border" : ""
+              }`}
             >
-              {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
-            </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSidebarOpen((previous) => !previous)}
+                aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
+                className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+              >
+                {isSidebarOpen ? <PanelLeftClose className="h-5 w-5" /> : <PanelLeft className="h-5 w-5" />}
+              </Button>
 
-            <h1 className="text-base font-semibold text-foreground md:text-lg truncate shrink-0">
-              {pageTitle}
-            </h1>
+              <h1
+                className={`font-semibold text-foreground truncate shrink-0 leading-none ${
+                  tabs
+                    ? "text-xs sm:text-sm max-w-[140px] sm:max-w-[180px] lg:max-w-[240px]"
+                    : "text-base md:text-lg"
+                }`}
+              >
+                {pageTitle}
+              </h1>
+            </div>
+
+            {tabs && (
+              <div
+                className={`flex items-center h-full min-w-0 flex-1 overflow-x-auto no-scrollbar scroll-smooth ${
+                  sidebarOffset > 0 ? "px-3" : "pl-1 pr-3"
+                }`}
+                onWheel={(e) => {
+                  if (e.deltaY !== 0) {
+                    e.currentTarget.scrollLeft += e.deltaY;
+                  }
+                }}
+              >
+                {sidebarOffset === 0 && (
+                  <div className="h-5 w-px bg-border/70 shrink-0 mr-2 sm:mr-3" />
+                )}
+                {tabs}
+              </div>
+            )}
           </div>
 
           {/* Centered In-Flow Header Slot with min-w-0 so it NEVER overlaps! */}
-          {center ? (
+          {!tabs && center ? (
             <div className="flex-1 flex items-center justify-center min-w-0 px-2 sm:px-4">
               <div className="w-full max-w-xs sm:max-w-md md:max-w-lg lg:max-w-xl min-w-0">
                 {center}
               </div>
             </div>
-          ) : (
+          ) : !tabs ? (
             <div className="flex-1" />
-          )}
+          ) : null}
 
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-auto">
             {/* Feature Custom Header Actions */}
             {actions}
 

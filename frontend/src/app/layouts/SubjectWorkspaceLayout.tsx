@@ -4,7 +4,7 @@
  * @owner App Shell Team
  */
 
-import React, { useState } from "react";
+import React from "react";
 import { Outlet, useParams } from "react-router-dom";
 import { PanelRight, PanelRightClose } from "lucide-react";
 import { Button } from "@/components/ui/button";

@@ -60,15 +60,64 @@
   background: var(--crepe-color-background) !important;
 }
 
-/* Outer editor container */
+/* Outer editor container: strictly prevent horizontal scrolling */
 .milkdown-editor {
   background-color: hsl(var(--background));
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+.milkdown {
+  position: relative !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
 }
 
 /* Top persistent formatting bar */
 .milkdown .milkdown-top-bar {
   background: hsl(var(--card)) !important;
   border-bottom: 1px solid hsl(var(--border)) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: nowrap !important;
+  box-sizing: border-box !important;
+  padding: 0 12px 0 8px !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  overflow: visible !important;
+}
+
+.milkdown .milkdown-top-bar .top-bar-inner {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  scrollbar-width: none !important;
+}
+
+.milkdown .milkdown-top-bar .top-bar-inner::-webkit-scrollbar {
+  display: none !important;
+}
+
+.milkdown .milkdown-top-bar .milkdown-topbar-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex-shrink: 0 !important;
+  margin-left: auto !important;
+  padding-left: 8px !important;
+  border-left: 1px solid hsl(var(--border)) !important;
+  z-index: 25 !important;
 }
 
 .milkdown .milkdown-top-bar .top-bar-divider {
@@ -141,15 +190,96 @@
 }
 
 /* Block handle (+ / drag handle) */
+.milkdown .milkdown-block-handle {
+  z-index: 15 !important;
+  position: absolute !important;
+  display: flex !important;
+  align-items: center !important;
+  pointer-events: auto !important;
+}
+
+.milkdown .milkdown-block-handle[data-show='false'] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.milkdown .milkdown-block-handle[data-show='true'] {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.milkdown .milkdown-block-handle .operation-item {
+  color: hsl(var(--muted-foreground)) !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background-color 0.15s, color 0.15s !important;
+}
+
 .milkdown .milkdown-block-handle .operation-item:hover {
   background: hsl(var(--accent)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.milkdown .milkdown-block-handle .operation-item svg {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* Link popups (edit & preview) */
+.milkdown .milkdown-link-edit,
+.milkdown .milkdown-link-preview {
+  z-index: 50 !important;
+}
+
+.milkdown .milkdown-link-edit .link-edit,
+.milkdown .milkdown-link-preview .link-preview {
+  background: hsl(var(--popover)) !important;
+  color: hsl(var(--popover-foreground)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  box-shadow: var(--crepe-shadow-2) !important;
+  border-radius: var(--radius) !important;
+}
+
+.milkdown .milkdown-link-edit .input-area {
+  color: hsl(var(--popover-foreground)) !important;
+}
+
+.milkdown .milkdown-link-edit .input-area::placeholder {
+  color: hsl(var(--muted-foreground)) !important;
+}
+
+.milkdown .milkdown-link-edit .button:hover,
+.milkdown .milkdown-link-preview .button:hover,
+.milkdown .milkdown-link-preview .link-icon:hover {
+  background: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
+}
+
+.milkdown .milkdown-link-edit .button svg,
+.milkdown .milkdown-link-preview .button svg,
+.milkdown .milkdown-link-preview .link-icon svg {
+  color: hsl(var(--muted-foreground)) !important;
+  fill: hsl(var(--muted-foreground)) !important;
 }
 
 /* ProseMirror editing canvas */
 .milkdown .ProseMirror {
   min-height: calc(100% - 44px);
-  padding: 1.5rem 2rem 4rem;
+  /* 5.5rem (88px) left padding provides room for 66px block handle (+ and ::) without clipping */
+  padding: 2rem 3rem 6rem 5.5rem !important;
   outline: none;
   background: transparent !important;
   color: hsl(var(--foreground)) !important;
+  max-width: 860px !important;
+  box-sizing: border-box !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+}
+
+.milkdown .ProseMirror code:not(pre code) {
+  white-space: normal !important;
+  word-break: break-all !important;
 }

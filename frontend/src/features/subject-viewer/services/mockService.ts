@@ -71,9 +71,9 @@ export const mockSubjectViewerService: SubjectViewerService = {
 
   async getDocumentUrl(storagePath: string): Promise<Result<string>> {
     await pause();
-    // In mock mode, we simulate a signed blob or data URL
+    // In mock mode, serve the local bundled demo PDF
     return {
-      data: `https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf#${encodeURIComponent(storagePath)}`,
+      data: "/pdfjs/web/compressed.tracemonkey-pldi-09.pdf",
       error: null,
     };
   },

@@ -1,20 +1,20 @@
 import React, { useEffect } from "react";
-import { FileText, Save, Trash2, Lock, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { FileText, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { SubjectNote } from "../services";
 import { MilkdownEditor } from "./MilkdownEditor";
+import { PdfJsViewer } from "./PdfJsViewer";
 
 interface Props {
   note: SubjectNote | null;
-  title: string;
+  title?: string;
   content: string;
   saving: boolean;
   isDirty?: boolean;
+  isActive?: boolean;
   contentUrl?: string | null;
   isLoadingUrl?: boolean;
-  onTitle: (value: string) => void;
+  onTitle?: (value: string) => void;
   onContent: (value: string) => void;
   onSave: () => void;
   onDelete?: () => void;
@@ -22,19 +22,21 @@ interface Props {
 
 export function DocumentViewer({
   note,
-  title,
+  title: _title,
   content,
   saving,
   isDirty = false,
+  isActive = true,
   contentUrl,
   isLoadingUrl = false,
-  onTitle,
+  onTitle: _onTitle,
   onContent,
   onSave,
   onDelete,
 }: Props) {
-  // Listen for Ctrl+S / Cmd+S shortcut to save
+  // Listen for Ctrl+S / Cmd+S shortcut to save (only on active tab)
   useEffect(() => {
+    if (!isActive) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === "s") {
         e.preventDefault();
@@ -45,7 +47,7 @@ export function DocumentViewer({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [note?.tag, saving, onSave]);
+  }, [isActive, note?.tag, saving, onSave]);
 
   if (!note) {
     return (
@@ -75,11 +77,7 @@ export function DocumentViewer({
             <span className="text-xs">Preparing document viewer…</span>
           </div>
         ) : activeUrl ? (
-          <iframe
-            className="min-h-0 flex-1 w-full bg-white border-0"
-            src={activeUrl}
-            title={note.title}
-          />
+          <PdfJsViewer url={activeUrl} title={note.title} />
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -108,62 +106,16 @@ export function DocumentViewer({
 
   // Personal editable Markdown note
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-3 border-b bg-background px-4 py-2.5">
-        <div className="relative flex-1 max-w-sm">
-          <Input
-            value={title}
-            onChange={(event) => onTitle(event.target.value)}
-            aria-label="Note title"
-            placeholder="Untitled note..."
-            className="h-8 text-sm font-medium"
-          />
-          {isDirty && (
-            <span
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 h-2 w-2 rounded-full bg-amber-500"
-              title="Unsaved changes"
-            />
-          )}
-        </div>
-
-        <div className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Lock className="h-3 w-3" />
-          <span>Private Note</span>
-          {isDirty && (
-            <Badge variant="outline" className="text-[10px] text-amber-600 dark:text-amber-400 border-amber-500/30">
-              Unsaved
-            </Badge>
-          )}
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          {onDelete && (
-            <Button
-              onClick={onDelete}
-              variant="ghost"
-              size="sm"
-              className="h-8 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
-              title="Delete note"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Delete</span>
-            </Button>
-          )}
-
-          <Button
-            onClick={onSave}
-            disabled={saving || !isDirty}
-            size="sm"
-            className="h-8 gap-1.5 text-xs font-semibold cursor-pointer"
-            title="Save note (Ctrl+S)"
-          >
-            <Save className="h-3.5 w-3.5" />
-            <span>{saving ? "Saving…" : "Save"}</span>
-          </Button>
-        </div>
-      </div>
-
-      <MilkdownEditor key={note.id} initialValue={content} onChange={onContent} />
+    <div className="relative flex h-full flex-col overflow-hidden">
+      <MilkdownEditor
+        key={note.id}
+        initialValue={content}
+        onChange={onContent}
+        onSave={onSave}
+        onDelete={onDelete}
+        isDirty={isDirty}
+        saving={saving}
+      />
     </div>
   );
 }

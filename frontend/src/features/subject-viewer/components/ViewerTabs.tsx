@@ -1,6 +1,11 @@
+/**
+ * @file ViewerTabs.tsx
+ * @description Sleek top-header tabs for open documents in the Subject Workspace.
+ * @owner Subject Viewer Team
+ */
+
 import React from "react";
-import { FileText, X, PanelLeft, PanelLeftClose } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { FileText, X } from "lucide-react";
 import type { SubjectNote } from "../services";
 
 interface Props {
@@ -8,8 +13,8 @@ interface Props {
   activeId: string | null;
   onSelect: (note: SubjectNote) => void;
   onClose: (id: string) => void;
-  isSidebarOpen?: boolean;
-  onToggleSidebar?: () => void;
+  getTabTitle?: (note: SubjectNote) => string;
+  isTabDirty?: (id: string) => boolean;
 }
 
 export function ViewerTabs({
@@ -17,74 +22,60 @@ export function ViewerTabs({
   activeId,
   onSelect,
   onClose,
-  isSidebarOpen = true,
-  onToggleSidebar,
+  getTabTitle,
+  isTabDirty,
 }: Props) {
   if (tabs.length === 0) {
-    return (
-      <div className="flex h-9 shrink-0 items-center overflow-hidden border-b bg-muted/20 text-xs text-muted-foreground select-none">
-        {onToggleSidebar && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggleSidebar}
-            className="h-full w-9 shrink-0 rounded-none border-r text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
-            title={isSidebarOpen ? "Collapse Course Resources" : "Expand Course Resources"}
-            aria-label={isSidebarOpen ? "Collapse Course Resources" : "Expand Course Resources"}
-          >
-            {isSidebarOpen ? (
-              <PanelLeftClose className="h-4 w-4" />
-            ) : (
-              <PanelLeft className="h-4 w-4" />
-            )}
-          </Button>
-        )}
-        <span className="px-4">No documents currently open</span>
-      </div>
-    );
+    return null;
   }
 
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
+
   return (
-    <div className="flex h-9 shrink-0 items-stretch overflow-x-auto overflow-y-hidden border-b bg-muted/25 select-none no-scrollbar">
-      {onToggleSidebar && (
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onToggleSidebar}
-          className="h-full w-9 shrink-0 rounded-none border-r text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer"
-          title={isSidebarOpen ? "Collapse Course Resources" : "Expand Course Resources"}
-          aria-label={isSidebarOpen ? "Collapse Course Resources" : "Expand Course Resources"}
-        >
-          {isSidebarOpen ? (
-            <PanelLeftClose className="h-4 w-4" />
-          ) : (
-            <PanelLeft className="h-4 w-4" />
-          )}
-        </Button>
-      )}
+    <div
+      onWheel={handleWheel}
+      className="flex items-center h-full gap-1.5 overflow-x-auto no-scrollbar select-none scroll-smooth min-w-0"
+    >
       {tabs.map((note) => {
         const isActive = note.id === activeId;
+        const isDirty = isTabDirty?.(note.id);
+        const displayTitle = getTabTitle ? getTabTitle(note) : note.title;
+
         return (
           <div
             key={note.id}
-            className={`group flex h-full shrink-0 min-w-36 max-w-64 items-center gap-2 border-r px-3 text-xs transition-colors ${
+            className={`group flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs transition-colors shrink-0 max-w-[190px] border ${
               isActive
-                ? "bg-background text-foreground font-medium shadow-xs"
-                : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                ? "bg-secondary text-foreground font-medium border-border/80 shadow-xs"
+                : "border-transparent text-muted-foreground hover:bg-muted/70 hover:text-foreground"
             }`}
           >
             <button
               type="button"
               onClick={() => onSelect(note)}
-              className="flex min-w-0 flex-1 items-center gap-2 text-left truncate cursor-pointer py-1.5"
+              className="flex min-w-0 flex-1 items-center gap-1.5 text-left truncate cursor-pointer leading-none"
+              title={displayTitle}
             >
               <FileText
                 className={`h-3.5 w-3.5 shrink-0 ${
                   isActive ? "text-primary" : "text-muted-foreground"
                 }`}
               />
-              <span className="truncate">{note.title}</span>
+              <span className="truncate leading-none">{displayTitle}</span>
             </button>
+
+            {/* Unsaved indicator dot */}
+            {isDirty && (
+              <span
+                className="h-2 w-2 rounded-full bg-amber-500 shrink-0"
+                title="Unsaved changes"
+                aria-label="Unsaved changes"
+              />
+            )}
 
             <button
               type="button"
@@ -92,10 +83,10 @@ export function ViewerTabs({
                 e.stopPropagation();
                 onClose(note.id);
               }}
-              aria-label={`Close ${note.title}`}
-              className="rounded p-0.5 opacity-60 hover:bg-muted hover:opacity-100 transition-opacity cursor-pointer shrink-0"
+              aria-label={`Close ${displayTitle}`}
+              className="rounded-sm p-0.5 opacity-60 hover:bg-background/80 hover:opacity-100 transition-opacity cursor-pointer shrink-0 ml-0.5 flex items-center justify-center"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
         );

@@ -8,9 +8,14 @@ import {
   FolderOpenDot,
   Plus,
   Lock,
+  PanelLeftClose,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { ResizeHandle } from "@/components/ui/resize-handle";
 import type { NoteTag, SubjectNote } from "../services";
 
 const sharedGroups: { tag: Extract<NoteTag, "Lecture / Day wise" | "Unit wise" | "Other" | "PYQ">; label: string }[] = [
@@ -25,10 +30,31 @@ interface Props {
   activeId: string | null;
   onOpen: (note: SubjectNote) => void;
   onCreate: () => void;
+  onRename?: (id: string, newTitle: string) => void;
+  onDelete?: (id: string) => void;
   isOpen?: boolean;
+  onClose?: () => void;
+  width?: number;
+  isDragging?: boolean;
+  resizeHandleProps?: {
+    onPointerDown: (e: React.PointerEvent) => void;
+    onDoubleClick?: () => void;
+  };
 }
 
-export function ResourceTree({ notes, activeId, onOpen, onCreate, isOpen = true }: Props) {
+export function ResourceTree({
+  notes,
+  activeId,
+  onOpen,
+  onCreate,
+  onRename,
+  onDelete,
+  isOpen = true,
+  onClose,
+  width = 256,
+  isDragging = false,
+  resizeHandleProps,
+}: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({
     Shared: true,
     "Lecture / Day wise": true,
@@ -37,6 +63,9 @@ export function ResourceTree({ notes, activeId, onOpen, onCreate, isOpen = true 
     Other: true,
     Private: true,
   });
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState<string>("");
 
   const toggle = (key: string) => {
     setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -47,21 +76,35 @@ export function ResourceTree({ notes, activeId, onOpen, onCreate, isOpen = true 
 
   return (
     <aside
-      className={`w-64 h-full shrink-0 flex flex-col bg-card select-none overflow-hidden transition-[margin-left] duration-150 ease-out will-change-[margin-left] ${
-        isOpen ? "ml-0 border-r" : "-ml-64 border-r-0 pointer-events-none"
+      style={{ width: isOpen ? `${width}px` : 0 }}
+      className={`relative h-full shrink-0 flex flex-col bg-card select-none overflow-hidden ${
+        isDragging ? "transition-none" : "transition-[width] duration-200 ease-in-out"
+      } ${
+        isOpen ? "border-r border-border" : "border-0 pointer-events-none invisible"
       }`}
     >
-      <div className="w-64 flex h-full flex-col min-h-0">
-        <div className="flex items-center justify-between border-b px-3.5 py-2.5">
-          <div className="flex items-center gap-2">
-            <FolderOpen className="h-4 w-4 text-primary" />
-            <span className="text-xs font-bold tracking-tight uppercase text-muted-foreground">
-              Course Resources
+      <div className="flex h-full flex-col min-h-0" style={{ width: `${width}px` }}>
+        <div className="flex items-center justify-between border-b px-3 py-2 h-10">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-xs font-bold tracking-tight uppercase text-muted-foreground truncate">
+              Resources
             </span>
+            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium shrink-0">
+              {notes.length}
+            </Badge>
           </div>
-          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-medium">
-            {notes.length}
-          </Badge>
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              className="h-6 w-6 text-muted-foreground hover:text-foreground cursor-pointer"
+              title="Collapse Resources (Ctrl+B)"
+              aria-label="Collapse Resources"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-3">
@@ -167,21 +210,97 @@ export function ResourceTree({ notes, activeId, onOpen, onCreate, isOpen = true 
             <div className="ml-3 mt-1 border-l pl-2 space-y-0.5">
               {privateNotes.map((note) => {
                 const isActive = note.id === activeId;
+                const isEditing = editingId === note.id;
+
+                if (isEditing) {
+                  return (
+                    <form
+                      key={note.id}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (editingTitle.trim() && onRename) {
+                          onRename(note.id, editingTitle.trim());
+                        }
+                        setEditingId(null);
+                      }}
+                      className="px-1 py-0.5"
+                    >
+                      <Input
+                        autoFocus
+                        value={editingTitle}
+                        onChange={(e) => setEditingTitle(e.target.value)}
+                        onBlur={() => {
+                          if (editingTitle.trim() && onRename) {
+                            onRename(note.id, editingTitle.trim());
+                          }
+                          setEditingId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Escape") {
+                            setEditingId(null);
+                          }
+                        }}
+                        className="h-6 text-xs px-1.5 py-0 bg-background"
+                      />
+                    </form>
+                  );
+                }
+
                 return (
-                  <button
+                  <div
                     key={note.id}
-                    type="button"
-                    onClick={() => onOpen(note)}
-                    className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs transition-colors ${
+                    className={`group/note flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs transition-colors ${
                       isActive
                         ? "bg-primary/10 text-primary font-medium"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
                     }`}
-                    title={note.title}
                   >
-                    <FileText className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                    <span className="truncate">{note.title}</span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => onOpen(note)}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(note.id);
+                        setEditingTitle(note.title);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-left truncate cursor-pointer"
+                      title={`${note.title} (Double-click to rename)`}
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0 opacity-80" />
+                      <span className="truncate">{note.title}</span>
+                    </button>
+
+                    <div className="flex items-center gap-0.5 opacity-0 group-hover/note:opacity-100 transition-opacity shrink-0">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(note.id);
+                          setEditingTitle(note.title);
+                        }}
+                        className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted-foreground/10 cursor-pointer"
+                        title="Rename note"
+                        aria-label={`Rename ${note.title}`}
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+
+                      {onDelete && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(note.id);
+                          }}
+                          className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 cursor-pointer"
+                          title="Delete note"
+                          aria-label={`Delete ${note.title}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
 
@@ -208,6 +327,15 @@ export function ResourceTree({ notes, activeId, onOpen, onCreate, isOpen = true 
         </Button>
       </div>
       </div>
+
+      {isOpen && resizeHandleProps && (
+        <ResizeHandle
+          side="right"
+          isDragging={isDragging}
+          onPointerDown={resizeHandleProps.onPointerDown}
+          onDoubleClick={resizeHandleProps.onDoubleClick}
+        />
+      )}
     </aside>
   );
 }
