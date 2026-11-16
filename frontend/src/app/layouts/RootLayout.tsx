@@ -10,7 +10,6 @@ import {
   BookOpen,
   ChevronDown,
   ChevronRight,
-  Brain,
   Sun,
   Moon,
   Laptop,
@@ -57,13 +56,11 @@ function getInitials(name?: string | null): string {
   return "ST";
 }
 
-const studentTools = [
-  {
-    to: "/daily-quiz",
-    label: "Daily Quiz",
-    icon: Brain,
-  },
-];
+const studentTools: {
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [];
 
 function getPageTitle(pathname: string): string {
   if (pathname === "/" || pathname === "/dashboard") return "Dashboard";
@@ -244,56 +241,58 @@ function RootLayoutContent() {
               )}
 
               {/* Student Tools */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setIsStudentToolsOpen((previous) => !previous)
-                  }
-                  className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                    isStudentToolsActive
-                      ? "font-semibold text-foreground"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
-                  aria-expanded={isStudentToolsOpen}
-                >
-                  <div className="flex items-center gap-3">
-                    <Wrench className="h-4 w-4 shrink-0" />
-                    <span>Student Tools</span>
-                  </div>
+              {studentTools.length > 0 && (
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setIsStudentToolsOpen((previous) => !previous)
+                    }
+                    className={`flex w-full cursor-pointer items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                      isStudentToolsActive
+                        ? "font-semibold text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                    aria-expanded={isStudentToolsOpen}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Wrench className="h-4 w-4 shrink-0" />
+                      <span>Student Tools</span>
+                    </div>
 
-                  {isStudentToolsOpen ? (
-                    <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    {isStudentToolsOpen ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </button>
+
+                  {isStudentToolsOpen && (
+                    <div className="ml-4 mt-1 space-y-1 border-l pl-2">
+                      {studentTools.map((tool) => {
+                        const Icon = tool.icon;
+                        const isActive = location.pathname.startsWith(tool.to);
+
+                        return (
+                          <NavLink
+                            key={tool.to}
+                            to={tool.to}
+                            onClick={closeSidebarOnMobile}
+                            className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
+                              isActive
+                                ? "bg-primary/10 font-semibold text-primary"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                            <span>{tool.label}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </div>
                   )}
-                </button>
-
-                {isStudentToolsOpen && (
-                  <div className="ml-4 mt-1 space-y-1 border-l pl-2">
-                    {studentTools.map((tool) => {
-                      const Icon = tool.icon;
-                      const isActive = location.pathname.startsWith(tool.to);
-
-                      return (
-                        <NavLink
-                          key={tool.to}
-                          to={tool.to}
-                          onClick={closeSidebarOnMobile}
-                          className={`flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors ${
-                            isActive
-                              ? "bg-primary/10 font-semibold text-primary"
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                          }`}
-                        >
-                          <Icon className="h-3.5 w-3.5 shrink-0" />
-                          <span>{tool.label}</span>
-                        </NavLink>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* My Subjects */}
               <div className="pt-1">
