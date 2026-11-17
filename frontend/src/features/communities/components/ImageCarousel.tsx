@@ -4,7 +4,7 @@
  * @owner Communities Team
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight, Maximize2, Loader2 } from "lucide-react";
 import { useImageViewer } from "@/lib/image-viewer-context";
 
@@ -23,13 +23,20 @@ export function ImageCarousel({
 }: ImageCarouselProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loadedIndices, setLoadedIndices] = useState<Record<number, boolean>>({});
+  const [isAnimating, setIsAnimating] = useState(false);
+  const animatingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { openImageViewer } = useImageViewer();
 
   // Touch swipe state
   const touchStartXRef = useRef<number | null>(null);
   const touchEndXRef = useRef<number | null>(null);
 
-  const validImages = (images || []).filter((img) => Boolean(img && img.trim()));
+  // Stabilize the images array so effects don't fire on every render
+  const validImages = useMemo(
+    () => (images || []).filter((img) => Boolean(img && img.trim())),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [images?.join(",")]
+  );
   const total = validImages.length;
 
   // Background preload all carousel images so slide transitions feel instantaneous
@@ -47,6 +54,13 @@ export function ImageCarousel({
     });
   }, [validImages]);
 
+  // Clear the animating timer on unmount to avoid state updates on unmounted component
+  useEffect(() => {
+    return () => {
+      if (animatingTimerRef.current) clearTimeout(animatingTimerRef.current);
+    };
+  }, []);
+
   // Clamp current index if image list changes
   useEffect(() => {
     if (total === 0) return;
@@ -57,19 +71,28 @@ export function ImageCarousel({
 
   if (total === 0) return null;
 
+  // Slide helper: briefly marks element as will-change only during the 300ms
+  // transition so the GPU layer is promoted only when needed.
+  const slideTo = (nextIndex: number) => {
+    setIsAnimating(true);
+    setCurrentIndex(nextIndex);
+    if (animatingTimerRef.current) clearTimeout(animatingTimerRef.current);
+    animatingTimerRef.current = setTimeout(() => setIsAnimating(false), 320);
+  };
+
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === 0 ? total - 1 : prev - 1));
+    slideTo(currentIndex === 0 ? total - 1 : currentIndex - 1);
   };
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentIndex((prev) => (prev === total - 1 ? 0 : prev + 1));
+    slideTo(currentIndex === total - 1 ? 0 : currentIndex + 1);
   };
 
   const handleDotClick = (index: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurrentIndex(index);
+    slideTo(index);
   };
 
   const handleImageClick = (index: number, e: React.MouseEvent) => {
@@ -98,10 +121,10 @@ export function ImageCarousel({
 
     if (distance > minSwipeDistance) {
       // Swiped left -> Next image
-      setCurrentIndex((prev) => (prev === total - 1 ? 0 : prev + 1));
+      slideTo(currentIndex === total - 1 ? 0 : currentIndex + 1);
     } else if (distance < -minSwipeDistance) {
       // Swiped right -> Previous image
-      setCurrentIndex((prev) => (prev === 0 ? total - 1 : prev - 1));
+      slideTo(currentIndex === 0 ? total - 1 : currentIndex - 1);
     }
 
     touchStartXRef.current = null;
@@ -117,15 +140,15 @@ export function ImageCarousel({
       onTouchEnd={handleTouchEnd}
       onKeyDown={(e) => {
         if (e.key === "ArrowLeft") {
-          setCurrentIndex((prev) => (prev === 0 ? total - 1 : prev - 1));
+          slideTo(currentIndex === 0 ? total - 1 : currentIndex - 1);
         } else if (e.key === "ArrowRight") {
-          setCurrentIndex((prev) => (prev === total - 1 ? 0 : prev + 1));
+          slideTo(currentIndex === total - 1 ? 0 : currentIndex + 1);
         }
       }}
     >
       {/* Sliding Carousel Track */}
       <div
-        className="flex w-full h-full transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none"
+        className={`flex w-full h-full transition-transform duration-300 ease-out motion-reduce:transition-none ${isAnimating ? "will-change-transform" : ""}`}
         style={{
           transform: `translateX(-${currentIndex * 100}%)`,
         }}

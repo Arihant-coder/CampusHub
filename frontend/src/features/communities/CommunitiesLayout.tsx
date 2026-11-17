@@ -4,7 +4,7 @@
  * @owner Communities Team
  */
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useParams, useNavigate } from "react-router-dom";
 import { ShieldCheck } from "lucide-react";
 import { HeaderActions, HeaderCenter } from "@/lib/header-context";
@@ -31,6 +31,15 @@ export default function CommunitiesLayout() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { allSubjects } = useUserSubjects();
+
+  // Keep a stable ref to allSubjects so the pinned-forums effect can read the
+  // latest value without declaring it as a reactive dependency (avoids an
+  // infinite re-render loop caused by allSubjects getting a new array reference
+  // on every render cycle).
+  const allSubjectsRef = useRef(allSubjects);
+  useEffect(() => {
+    allSubjectsRef.current = allSubjects;
+  });
 
   const [isSidebarOpen, setIsSidebarOpen] = usePersistentToggle("campushub:sidebar:communities", true);
   const [enrolledForums, setEnrolledForums] = useState<SubjectForum[]>([]);
@@ -102,8 +111,9 @@ export default function CommunitiesLayout() {
         if (res.data) {
           return { ...res.data, isPinned: true };
         }
-        // Fallback to allSubjects catalog
-        const match = allSubjects.find((s) => s.id.toLowerCase() === id.toLowerCase());
+        // Fallback to allSubjects catalog — read from ref to avoid making
+        // allSubjects a dependency (would cause an infinite render loop).
+        const match = allSubjectsRef.current.find((s) => s.id.toLowerCase() === id.toLowerCase());
         return {
           id,
           name: match?.name || id.toUpperCase(),
@@ -121,7 +131,7 @@ export default function CommunitiesLayout() {
     return () => {
       isMounted = false;
     };
-  }, [activePinnedIds, allSubjects]);
+  }, [activePinnedIds]);
 
   // Combined forums for context consumption
   const allForums = useMemo(
