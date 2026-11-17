@@ -5,6 +5,7 @@ import {
   ArrowBigUp,
   ArrowRight,
   BookOpen,
+  CalendarDays,
   MessageSquare,
   Plus,
   SlidersHorizontal,
@@ -174,9 +175,21 @@ export default function DashboardPage() {
               <CardTitle className="text-base font-semibold text-foreground">
                 Calendar
               </CardTitle>
-              <span className="text-xs font-medium text-muted-foreground">
-                Monthly view
-              </span>
+
+              {/* Jump to Today button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedDate(today);
+                  setCalendarMonth(today);
+                }}
+                className="h-7 text-xs px-2 gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
+                title="Jump to today"
+              >
+                <CalendarDays className="size-3.5" />
+                Today
+              </Button>
             </CardHeader>
 
             <CardContent className="p-3 sm:p-4">
@@ -187,6 +200,9 @@ export default function DashboardPage() {
                 selected={selectedDate}
                 onSelect={setSelectedDate}
                 showOutsideDays
+                captionLayout="dropdown"
+                startMonth={new Date(2020, 0)}
+                endMonth={new Date(2035, 11)}
                 className="w-full p-0"
               />
             </CardContent>
