@@ -126,6 +126,7 @@ function RootLayoutContent() {
 
   const pageTitle = customTitle || getPageTitle(location.pathname);
   const isSubjectWorkspace = location.pathname.startsWith("/subjects");
+  const isCommunities = location.pathname.startsWith("/communities");
 
   const isStudentToolsActive = studentTools.some((tool) => location.pathname.startsWith(tool.to));
   const isSubjectsActive = location.pathname.startsWith("/subjects");
@@ -417,9 +418,9 @@ function RootLayoutContent() {
         {/* Top Header */}
         <header
           className={`flex h-14 items-center justify-between border-b bg-background min-w-0 ${
-            isSubjectWorkspace
-              ? "px-0 gap-0"
-              : "px-2 sm:px-4 lg:px-6 gap-2 sm:gap-4"
+            isSubjectWorkspace || isCommunities
+              ? "pl-0.5 sm:pl-1 pr-2 sm:pr-4 lg:pr-6 gap-0"
+              : "pl-1 sm:pl-2 pr-2 sm:pr-4 lg:pr-6 gap-2 sm:gap-4"
           }`}
         >
           <div className="flex items-center h-full min-w-0 flex-1">
@@ -429,7 +430,7 @@ function RootLayoutContent() {
                   ? { width: `${sidebarOffset}px` }
                   : undefined
               }
-              className={`flex items-center h-full px-2 sm:px-3 gap-2 shrink-0 ${
+              className={`flex items-center h-full pl-1 sm:pl-1.5 pr-2 sm:pr-3 gap-2 shrink-0 ${
                 isSidebarOffsetDragging ? "transition-none" : "transition-[width] duration-200 ease-in-out"
               } overflow-hidden ${
                 sidebarOffset > 0 ? "border-r border-border" : ""

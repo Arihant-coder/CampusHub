@@ -24,6 +24,7 @@ export interface CommunitiesContextType {
   isPinned: boolean;
   isEnrolled: boolean;
   onTogglePin: (subjectId: string) => void;
+  onForumUpdated?: (updated: SubjectForum) => void;
 }
 
 export default function CommunitiesLayout() {
@@ -206,6 +207,17 @@ export default function CommunitiesLayout() {
     activeForum && activePinnedIds.includes(activeForum.id.toLowerCase())
   );
 
+  // Handle updated forum data (e.g. after community image changes)
+  const handleForumUpdated = (updated: SubjectForum) => {
+    setActiveForum(updated);
+    setEnrolledForums((prev) =>
+      prev.map((f) => (f.id === updated.id ? updated : f))
+    );
+    setPinnedForumsData((prev) =>
+      prev.map((f) => (f.id === updated.id ? updated : f))
+    );
+  };
+
   return (
     <div className="flex h-[calc(100vh-5.5rem)] -m-4 md:-m-6 lg:-m-8 overflow-hidden bg-background relative">
       {/* Centered Global Header Search */}
@@ -258,6 +270,7 @@ export default function CommunitiesLayout() {
             isPinned: isActivePinned,
             isEnrolled: isActiveEnrolled,
             onTogglePin: handleTogglePin,
+            onForumUpdated: handleForumUpdated,
           }}
         />
       </div>

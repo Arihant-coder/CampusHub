@@ -40,10 +40,20 @@ export const realCommunitiesService: CommunitiesService = {
       }
 
       // Query enrolled subjects from user_subjects
-      const { data: enrolledRows, error } = await supabase
+      let { data: enrolledRows, error } = await supabase
         .from("user_subjects")
-        .select("subject_id, subjects(id, name, code, created_at)")
+        .select("subject_id, subjects(id, name, code, banner_url, logo_url, created_at)")
         .eq("user_id", user.id);
+
+      // Graceful fallback if banner_url or logo_url columns don't exist yet on live DB
+      if (error && error.message?.includes("does not exist")) {
+        const fallback = await supabase
+          .from("user_subjects")
+          .select("subject_id, subjects(id, name, code, created_at)")
+          .eq("user_id", user.id);
+        enrolledRows = fallback.data as any;
+        error = fallback.error;
+      }
 
       if (error) {
         return {
@@ -74,6 +84,8 @@ export const realCommunitiesService: CommunitiesService = {
             code: s.code,
             memberCount: Math.max(1, count ?? 0),
             isPinned: false,
+            bannerUrl: s.banner_url || null,
+            logoUrl: s.logo_url || null,
           };
         })
       );
@@ -92,11 +104,21 @@ export const realCommunitiesService: CommunitiesService = {
 
   async getSubjectForum(subjectId: string): Promise<Result<SubjectForum>> {
     try {
-      const { data: s, error } = await supabase
+      let { data: s, error } = await supabase
         .from("subjects")
-        .select("id, name, code")
+        .select("id, name, code, banner_url, logo_url")
         .eq("id", subjectId)
         .single();
+
+      if (error && error.message?.includes("does not exist")) {
+        const fallback = await supabase
+          .from("subjects")
+          .select("id, name, code")
+          .eq("id", subjectId)
+          .single();
+        s = fallback.data as any;
+        error = fallback.error;
+      }
 
       if (error || !s) {
         return {
@@ -117,6 +139,8 @@ export const realCommunitiesService: CommunitiesService = {
           code: s.code,
           memberCount: Math.max(1, count ?? 0),
           isPinned: false,
+          bannerUrl: s.banner_url || null,
+          logoUrl: s.logo_url || null,
         },
         error: null,
       };
@@ -303,12 +327,22 @@ export const realCommunitiesService: CommunitiesService = {
       }
 
       // 1. Fetch matching subjects
-      const { data: subjectRows } = await supabase
+      let { data: subjectRows } = await supabase
         .from("subjects")
-        .select("id, name, code, created_at")
+        .select("id, name, code, banner_url, logo_url, created_at")
         .or(`name.ilike.%${clean}%,code.ilike.%${clean}%`)
         .order("name", { ascending: true })
         .limit(6);
+
+      if (!subjectRows) {
+        const fallback = await supabase
+          .from("subjects")
+          .select("id, name, code, created_at")
+          .or(`name.ilike.%${clean}%,code.ilike.%${clean}%`)
+          .order("name", { ascending: true })
+          .limit(6);
+        subjectRows = fallback.data as any;
+      }
 
       const forums: SubjectForum[] = (subjectRows || []).map((s) => ({
         id: s.id,
@@ -317,6 +351,8 @@ export const realCommunitiesService: CommunitiesService = {
         memberCount: 1,
         isPinned: false,
         description: "",
+        bannerUrl: s.banner_url || null,
+        logoUrl: s.logo_url || null,
       }));
 
       // 2. Fetch matching posts
@@ -1566,6 +1602,58 @@ export const realCommunitiesService: CommunitiesService = {
       };
     } catch (err: unknown) {
       return { data: null, error: { code: "NETWORK", message: (err as Error).message } };
+    }
+  },
+
+  async updateSubjectImages(
+    subjectId: string,
+    images: { bannerUrl?: string | null; logoUrl?: string | null }
+  ): Promise<Result<SubjectForum>> {
+    try {
+      const updateData: Record<string, string | null> = {};
+      if (images.bannerUrl !== undefined) {
+        updateData.banner_url = images.bannerUrl;
+      }
+      if (images.logoUrl !== undefined) {
+        updateData.logo_url = images.logoUrl;
+      }
+
+      const { data: s, error } = await supabase
+        .from("subjects")
+        .update(updateData)
+        .eq("id", subjectId)
+        .select("id, name, code, banner_url, logo_url")
+        .single();
+
+      if (error || !s) {
+        return {
+          data: null,
+          error: { code: "INTERNAL", message: error?.message || "Failed to update community images." },
+        };
+      }
+
+      const { count } = await supabase
+        .from("user_subjects")
+        .select("*", { count: "exact", head: true })
+        .eq("subject_id", s.id);
+
+      return {
+        data: {
+          id: s.id,
+          name: s.name,
+          code: s.code,
+          memberCount: Math.max(1, count ?? 0),
+          isPinned: false,
+          bannerUrl: s.banner_url || null,
+          logoUrl: s.logo_url || null,
+        },
+        error: null,
+      };
+    } catch (err: unknown) {
+      return {
+        data: null,
+        error: { code: "NETWORK", message: (err as Error).message || "Network error updating community images." },
+      };
     }
   },
 };

@@ -160,6 +160,9 @@ export default function CommunitiesPage() {
                 ? () => context.onTogglePin(activeForum.id)
                 : undefined
             }
+            onForumUpdated={(updated) => {
+              context?.onForumUpdated?.(updated);
+            }}
           />
 
           {/* Main Tabs: Posts | Resources */}

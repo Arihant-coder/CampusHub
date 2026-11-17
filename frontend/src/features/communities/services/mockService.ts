@@ -30,6 +30,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "Discussion forum and academic resource archive for DBMS course.",
     imageUrl: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1544383835-bda2bc66a55d?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "cs302",
@@ -39,6 +41,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "OSI stack, TCP/IP, routing protocols, and lab assignments.",
     imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "cs303",
@@ -48,6 +52,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "Concurrency, scheduling, memory paging, and Unix kernel calls.",
     imageUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "cs304",
@@ -57,6 +63,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "Trees, graphs, dynamic programming, sorting, and complexity.",
     imageUrl: "https://images.unsplash.com/photo-1516116211227-bbc6732f790c?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1516116211227-bbc6732f790c?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "ee101",
@@ -66,6 +74,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "Circuit analysis, AC/DC transients, transformers, and theorems.",
     imageUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "me102",
@@ -75,6 +85,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: true,
     description: "Orthographic projections, isometric views, and CAD models.",
     imageUrl: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1581291518857-4e27b48ff24e?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "cs305",
@@ -84,6 +96,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: true,
     description: "Advanced algorithmic paradigms, NP-completeness, and greedy heuristics.",
     imageUrl: "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1509228468518-180dd4864904?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
   {
     id: "epp",
@@ -93,6 +107,8 @@ const INITIAL_SUBJECT_FORUMS: SubjectForum[] = [
     isPinned: false,
     description: "Ethics, professional standards, engineering economics, and project management.",
     imageUrl: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=100&auto=format&fit=crop&q=80",
+    bannerUrl: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=1200&auto=format&fit=crop&q=80",
+    logoUrl: null,
   },
 ];
 
@@ -666,6 +682,24 @@ let mockModerationLogs: ModerationLogEntry[] = [
 
 // In-memory state
 let subjectForums = [...INITIAL_SUBJECT_FORUMS];
+
+// Hydrate stored community custom images from localStorage if any
+try {
+  subjectForums = subjectForums.map((f) => {
+    const raw = localStorage.getItem(`campushub:mock:community_images:${f.id}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        ...f,
+        bannerUrl: parsed.bannerUrl !== undefined ? parsed.bannerUrl : f.bannerUrl,
+        logoUrl: parsed.logoUrl !== undefined ? parsed.logoUrl : f.logoUrl,
+      };
+    }
+    return f;
+  });
+} catch {
+  // ignore
+}
 let posts: Post[] = INITIAL_POSTS.map((p) => ({ ...p, authorName: p.authorName || p.authorHandle || "Anonymous" }));
 let comments: Comment[] = INITIAL_COMMENTS.map((c) => ({ ...c, authorName: c.authorName || c.authorHandle || "Anonymous" }));
 let resources: ResourceNote[] = INITIAL_RESOURCES.map((r) => ({ ...r, uploaderName: r.uploaderName || r.uploaderHandle || "Anonymous" }));
@@ -695,7 +729,11 @@ export const mockCommunitiesService: CommunitiesService = {
         (lowerId === "cs301" && enrolledIds.includes("dbms")) ||
         (lowerId === "cs302" && enrolledIds.includes("cn")) ||
         (lowerId === "cs303" && enrolledIds.includes("os")) ||
-        (lowerId === "cs304" && enrolledIds.includes("dsa")) ||
+        (lowerId === "cs304" && (enrolledIds.includes("dsa") || enrolledIds.includes("cs201"))) ||
+        (lowerId === "cs305" && enrolledIds.includes("daa")) ||
+        (lowerId === "ee101" && enrolledIds.includes("bee")) ||
+        (lowerId === "me102" && enrolledIds.includes("eg")) ||
+        (lowerId === "epp" && (enrolledIds.includes("epp") || enrolledIds.includes("hs301"))) ||
         (lowerId === "hs301" && enrolledIds.includes("epp"))
       );
     });
@@ -1372,5 +1410,50 @@ export const mockCommunitiesService: CommunitiesService = {
       },
       error: null,
     };
+  },
+
+  async updateSubjectImages(
+    subjectId: string,
+    images: { bannerUrl?: string | null; logoUrl?: string | null }
+  ): Promise<Result<SubjectForum>> {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const idx = subjectForums.findIndex(
+      (f) => f.id.toLowerCase() === subjectId.toLowerCase() || f.code.toLowerCase() === subjectId.toLowerCase()
+    );
+    if (idx === -1) {
+      return { data: null, error: { code: "NOT_FOUND", message: "Forum not found" } };
+    }
+
+    const current = subjectForums[idx];
+    const updated: SubjectForum = {
+      ...current,
+      bannerUrl: images.bannerUrl !== undefined ? images.bannerUrl : current.bannerUrl,
+      logoUrl: images.logoUrl !== undefined ? images.logoUrl : current.logoUrl,
+    };
+    subjectForums[idx] = updated;
+
+    try {
+      localStorage.setItem(
+        `campushub:mock:community_images:${updated.id}`,
+        JSON.stringify({ bannerUrl: updated.bannerUrl, logoUrl: updated.logoUrl })
+      );
+    } catch {
+      // ignore
+    }
+
+    mockModerationLogs.unshift({
+      id: `log-${Date.now()}`,
+      subjectId: updated.id,
+      subjectName: updated.name,
+      actor: "mock-staff-uuid",
+      actorHandle: "moderator",
+      actorName: "Community Moderator",
+      target: updated.id,
+      action: "update_community_images",
+      details: { bannerUrl: updated.bannerUrl, logoUrl: updated.logoUrl },
+      createdAt: new Date().toISOString(),
+    });
+
+    return { data: updated, error: null };
   },
 };

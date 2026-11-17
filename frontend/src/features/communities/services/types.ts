@@ -21,6 +21,8 @@ export interface SubjectForum {
   isPinned?: boolean;
   description?: string;
   imageUrl?: string | null;
+  bannerUrl?: string | null;
+  logoUrl?: string | null;
 }
 
 export interface Comment {
@@ -156,6 +158,10 @@ export interface CommunitiesService {
     file?: File;
     isDirectPublish?: boolean;
   }): Promise<Result<ResourceNote>>;
+  updateSubjectImages?(
+    subjectId: string,
+    images: { bannerUrl?: string | null; logoUrl?: string | null }
+  ): Promise<Result<SubjectForum>>;
   deleteResource?(resourceId: string, storagePath?: string): Promise<Result<boolean>>;
   deletePost?(postId: string, imagePaths?: string[]): Promise<Result<boolean>>;
   deleteComment?(commentId: string, imagePaths?: string[]): Promise<Result<boolean>>;
