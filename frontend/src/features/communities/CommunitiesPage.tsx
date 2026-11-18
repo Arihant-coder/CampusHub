@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { CommunityHeader } from "./components/CommunityHeader";
 import { PostFeed } from "./components/PostFeed";
 import { ResourceArchive } from "./components/ResourceArchive";
@@ -21,10 +22,53 @@ import type {
   ResourceCategory,
 } from "./services/types";
 
+/** Skeleton shown while the layout resolves forums & activeForum */
+function CommunitiesPageSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* CommunityHeader skeleton */}
+      <div className="rounded-xl border overflow-hidden">
+        {/* Banner */}
+        <Skeleton className="h-28 w-full rounded-none" />
+        {/* Header meta row */}
+        <div className="flex items-end gap-4 px-5 pb-4 -mt-7">
+          <Skeleton className="h-14 w-14 rounded-full shrink-0 ring-2 ring-background" />
+          <div className="flex-1 space-y-2 pb-1">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-7 w-16 rounded-md shrink-0" />
+        </div>
+      </div>
+
+      {/* Tabs bar */}
+      <div className="border-b flex gap-6 pb-2">
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-4 w-18" />
+      </div>
+
+      {/* Feed action bar */}
+      <div className="flex items-center gap-3 pt-1">
+        <Skeleton className="h-8 w-16 rounded-md" />
+        <Skeleton className="h-8 flex-1 rounded-lg" />
+        <Skeleton className="h-8 w-24 rounded-md" />
+      </div>
+
+      {/* Post cards */}
+      <div className="space-y-3">
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+        <Skeleton className="h-28 w-full rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 export default function CommunitiesPage() {
   const context = useOutletContext<CommunitiesContextType | undefined>();
 
   const activeForum = context?.activeForum || null;
+  const isLoadingLayout = context?.isLoadingLayout ?? true;
   const [communitySearchQuery, setCommunitySearchQuery] = useState("");
   const debouncedSearch = useDebounce(communitySearchQuery, 350);
 
@@ -148,7 +192,9 @@ export default function CommunitiesPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 min-w-0">
-      {activeForum ? (
+      {isLoadingLayout ? (
+        <CommunitiesPageSkeleton />
+      ) : activeForum ? (
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Forum Header Banner */}
           <CommunityHeader

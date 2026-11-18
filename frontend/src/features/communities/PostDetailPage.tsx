@@ -328,11 +328,41 @@ export default function PostDetailPage() {
       {/* Centered post container without outer card border */}
       <div className="w-full max-w-4xl mx-auto space-y-3">
         {isLoading ? (
-          <div className="space-y-3 py-4">
-            <Skeleton className="h-6 w-1/3" />
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-64 w-full rounded-xl" />
-            <Skeleton className="h-20 w-full" />
+          <div className="space-y-4 py-4 animate-in fade-in-0 duration-200">
+            {/* Back button + community meta row */}
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-3.5 w-44" />
+                <Skeleton className="h-3 w-28" />
+              </div>
+            </div>
+            {/* Post title */}
+            <Skeleton className="h-7 w-3/4 rounded-md" />
+            <Skeleton className="h-5 w-1/2 rounded-md" />
+            {/* Image placeholder */}
+            <Skeleton className="h-56 w-full rounded-xl" />
+            {/* Body text lines */}
+            <div className="space-y-2 pt-1">
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-5/6" />
+              <Skeleton className="h-3.5 w-4/6" />
+            </div>
+            {/* Action bar */}
+            <div className="flex items-center gap-3 pt-2 border-b pb-4">
+              <Skeleton className="h-8 w-24 rounded-lg" />
+              <Skeleton className="h-8 w-28 rounded-lg" />
+              <Skeleton className="h-8 w-16 rounded-lg" />
+            </div>
+            {/* Comment box placeholder */}
+            <Skeleton className="h-11 w-full rounded-xl" />
+            {/* Comments section */}
+            <div className="pt-2 space-y-3">
+              <Skeleton className="h-4 w-24 rounded" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+              <Skeleton className="h-20 w-full rounded-xl" />
+            </div>
           </div>
         ) : !post ? (
           <div className="rounded-xl border border-dashed p-12 text-center text-sm text-muted-foreground">

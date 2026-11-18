@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { Upload, Loader2, CheckCircle2, Trash2, Network, Image as ImageIcon } from "lucide-react";
 import { processCommunityImage, type ProcessedImageResult } from "../utils/imagePipeline";
 import { processLogoImage, type ProcessedLogoResult } from "../utils/logoImagePipeline";
+import { BANNER_PRESETS, type BannerPreset } from "../utils/bannerPresets";
 import { communitiesService } from "../services";
 import type { SubjectForum } from "../services/types";
 import { supabase } from "@/lib/supabase";
@@ -91,6 +92,26 @@ export const CommunityImageEditDialog: React.FC<CommunityImageEditDialogProps> =
     }
   };
 
+  const handleSelectPreset = async (preset: BannerPreset) => {
+    try {
+      const res = await fetch(preset.dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], `${preset.id}.svg`, { type: "image/svg+xml" });
+      setProcessedBanner({
+        dataUrl: preset.dataUrl,
+        file,
+        originalName: `${preset.name}.svg`,
+        sizeBytes: blob.size,
+        width: 1200,
+        height: 400,
+      });
+      setRemoveBanner(false);
+      toast.success(`Selected "${preset.name}" minimal banner`);
+    } catch {
+      toast.error("Failed to select preset banner");
+    }
+  };
+
   const handleLogoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -121,12 +142,15 @@ export const CommunityImageEditDialog: React.FC<CommunityImageEditDialogProps> =
         if (isMock) {
           finalBannerUrl = processedBanner.dataUrl;
         } else {
-          const filePath = `${forum.id}/banner.webp`;
+          const isSvg = processedBanner.file.type === "image/svg+xml";
+          const ext = isSvg ? "svg" : "webp";
+          const contentType = isSvg ? "image/svg+xml" : "image/webp";
+          const filePath = `${forum.id}/banner.${ext}`;
           const { error: uploadError } = await supabase.storage
             .from("community-images")
             .upload(filePath, processedBanner.file, {
               upsert: true,
-              contentType: "image/webp",
+              contentType,
               cacheControl: "3600",
             });
           if (uploadError) throw new Error(uploadError.message);
@@ -235,8 +259,22 @@ export const CommunityImageEditDialog: React.FC<CommunityImageEditDialogProps> =
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-r from-primary/10 via-primary/5 to-muted/40 flex items-center justify-center text-xs text-muted-foreground font-medium">
-                    Default Gradient Banner
+                  <div className="w-full h-full relative overflow-hidden bg-slate-950 flex items-center justify-center select-none">
+                    <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-[#0a0f1d] to-[#090d16]" />
+                    <svg
+                      className="absolute inset-0 w-full h-full opacity-60"
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="100%"
+                      height="100%"
+                    >
+                      <pattern id="dialog-grid" width="30" height="30" patternUnits="userSpaceOnUse">
+                        <path d="M 30 0 L 0 0 0 30" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                      </pattern>
+                      <rect width="100%" height="100%" fill="url(#dialog-grid)" />
+                    </svg>
+                    <span className="relative z-10 text-[11px] text-muted-foreground font-medium">
+                      Default Minimal Banner
+                    </span>
                   </div>
                 )}
               </div>
@@ -299,6 +337,33 @@ export const CommunityImageEditDialog: React.FC<CommunityImageEditDialogProps> =
                 </Badge>
               </div>
             )}
+
+            {/* Curated Minimal Banner Presets */}
+            <div className="space-y-2 pt-1 border-t border-border/50">
+              <span className="text-xs font-semibold text-foreground">Or Choose a Minimal Preset</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {BANNER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleSelectPreset(preset)}
+                    className="group relative h-14 rounded-lg border border-border/80 hover:border-primary/60 overflow-hidden text-left transition-all cursor-pointer focus:outline-hidden focus:ring-1 focus:ring-primary shadow-2xs"
+                    title={preset.description}
+                  >
+                    <img
+                      src={preset.dataUrl}
+                      alt={preset.name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent flex items-end p-1.5">
+                      <span className="text-[10px] font-semibold text-white drop-shadow-xs truncate">
+                        {preset.name}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </TabsContent>
 
           {/* Logo Tab */}

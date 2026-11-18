@@ -20,6 +20,7 @@ import type { SubjectForum } from "./services/types";
 export interface CommunitiesContextType {
   forums: SubjectForum[];
   activeForum: SubjectForum | null;
+  isLoadingLayout: boolean;
   isSidebarOpen: boolean;
   isPinned: boolean;
   isEnrolled: boolean;
@@ -46,6 +47,7 @@ export default function CommunitiesLayout() {
   const [enrolledForums, setEnrolledForums] = useState<SubjectForum[]>([]);
   const [pinnedForumsData, setPinnedForumsData] = useState<SubjectForum[]>([]);
   const [activeForum, setActiveForum] = useState<SubjectForum | null>(null);
+  const [isLoadingLayout, setIsLoadingLayout] = useState(true);
 
   // Persistent storage key for pinned forums per user
   const pinStorageKey = `campushub:pinned_forums:${user?.id || "guest"}`;
@@ -76,10 +78,12 @@ export default function CommunitiesLayout() {
   // 1. Fetch Enrolled Forums
   useEffect(() => {
     let isMounted = true;
+    setIsLoadingLayout(true);
     communitiesService.getSubjectForums().then((res) => {
       if (isMounted && res.data) {
         setEnrolledForums(res.data);
       }
+      if (isMounted) setIsLoadingLayout(false);
     });
     return () => {
       isMounted = false;
@@ -254,6 +258,7 @@ export default function CommunitiesLayout() {
         enrolledForums={enrolledForums}
         pinnedForums={pinnedForumsData}
         activeSubjectId={activeForum?.id || ""}
+        isLoading={isLoadingLayout}
         onSelectSubject={handleSelectSubject}
         onUnpinSubject={handleUnpinSubject}
         isOpen={isSidebarOpen}
@@ -266,6 +271,7 @@ export default function CommunitiesLayout() {
           context={{
             forums: allForums,
             activeForum,
+            isLoadingLayout,
             isSidebarOpen,
             isPinned: isActivePinned,
             isEnrolled: isActiveEnrolled,

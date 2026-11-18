@@ -8,12 +8,14 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Pin, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { SubjectForum } from "../services/types";
 
 interface SubjectForumsSidebarProps {
   enrolledForums: SubjectForum[];
   pinnedForums: SubjectForum[];
   activeSubjectId: string;
+  isLoading?: boolean;
   onSelectSubject: (subjectId: string) => void;
   onUnpinSubject: (subjectId: string) => void;
   isOpen: boolean;
@@ -24,6 +26,7 @@ export function SubjectForumsSidebar({
   enrolledForums,
   pinnedForums,
   activeSubjectId,
+  isLoading = false,
   onSelectSubject,
   onUnpinSubject,
   isOpen,
@@ -60,7 +63,13 @@ export function SubjectForumsSidebar({
 
           {/* Enrolled Subjects List */}
           <div className="space-y-1 overflow-y-auto flex-1">
-            {enrolledForums.length === 0 ? (
+            {isLoading ? (
+              <div className="space-y-1.5 px-1 pt-1">
+                <Skeleton className="h-7 w-full rounded-lg" />
+                <Skeleton className="h-7 w-full rounded-lg" />
+                <Skeleton className="h-7 w-4/5 rounded-lg" />
+              </div>
+            ) : enrolledForums.length === 0 ? (
               <div className="py-6 px-2 text-center text-xs text-muted-foreground space-y-1.5">
                 <p>No enrolled subject forums.</p>
                 <Link

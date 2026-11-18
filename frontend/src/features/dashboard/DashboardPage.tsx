@@ -83,16 +83,6 @@ export default function DashboardPage() {
   return (
     <div className="min-h-full w-full min-w-0 bg-background text-foreground">
       <div className="mx-auto w-full max-w-[1400px] space-y-6 p-4 sm:p-6 lg:p-8">
-        {/* Simple Page Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Welcome back{user?.fullName ? `, ${user.fullName}` : ""}.
-          </p>
-        </div>
-
         {/* Subjects & Calendar Grid */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
           {/* My Subjects */}

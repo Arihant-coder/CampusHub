@@ -4,7 +4,8 @@
  * @owner Communities Team
  */
 
-import React, { useEffect, useState } from "react"; import { Users, Network, ShieldCheck, Pin, Camera, GraduationCap, Award, BookOpen } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Users, Network, ShieldCheck, Pin, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { communitiesService } from "../services";
 import type { SubjectForum, CommunityModerator } from "../services/types";
@@ -75,34 +76,36 @@ export function CommunityHeader({
             <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/15 to-transparent dark:from-slate-950/80 dark:via-slate-950/20 dark:to-transparent" />
           </>
         ) : (
-          /* Google Classroom-inspired academic vector theme backdrop */
-          <div className="w-full h-full relative overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-between px-6 sm:px-10 text-white select-none">
-            {/* Ambient colorful glow orbs */}
-            <div className="absolute -left-10 -top-10 w-72 h-72 bg-primary/25 rounded-full blur-3xl pointer-events-none" />
-            <div className="absolute right-10 -bottom-10 w-80 h-80 bg-amber-500/15 rounded-full blur-3xl pointer-events-none" />
+          /* Sleek Minimal Backdrop with subtle geometric grid & atmospheric gradient */
+          <div className="w-full h-full relative overflow-hidden bg-slate-950 select-none">
+            {/* Deep refined background */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-slate-950 via-[#0a0f1d] to-[#090d16]" />
+            <div className="absolute -top-12 right-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-10 left-10 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Academic watermark typography (Classroom style) */}
-            <div className="relative z-10 hidden sm:block opacity-75">
-              <span className="font-mono text-xs uppercase tracking-widest text-primary font-bold">
-                Academic Forum
-              </span>
-              <h2 className="text-xl sm:text-2xl font-extrabold tracking-tight text-white/90">
-                {forum.code}
-              </h2>
-            </div>
+            {/* Minimalist subtle grid pattern */}
+            <svg
+              className="absolute inset-0 w-full h-full opacity-60"
+              xmlns="http://www.w3.org/2000/svg"
+              width="100%"
+              height="100%"
+            >
+              <defs>
+                <pattern id="minimal-banner-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                  <circle cx="40" cy="40" r="1" fill="rgba(255,255,255,0.12)" />
+                </pattern>
+                <radialGradient id="banner-sheen" cx="70%" cy="25%" r="65%">
+                  <stop offset="0%" stopColor="rgba(99,102,241,0.12)" />
+                  <stop offset="100%" stopColor="transparent" />
+                </radialGradient>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#minimal-banner-grid)" />
+              <rect width="100%" height="100%" fill="url(#banner-sheen)" />
+            </svg>
 
-            {/* Stylized Classroom Academic Illustration */}
-            <div className="relative z-10 flex items-center gap-4 sm:gap-6 opacity-85">
-              <div className="hidden md:flex flex-col items-center justify-center p-3 rounded-xl bg-white/5 border border-white/10 backdrop-blur-xs">
-                <BookOpen className="h-6 w-6 text-indigo-300" />
-              </div>
-              <div className="flex items-center justify-center p-3.5 rounded-2xl bg-amber-500/20 border border-amber-400/30 shadow-inner">
-                <Award className="h-8 w-8 text-amber-400" />
-              </div>
-              <div className="hidden sm:flex items-center justify-center p-3 rounded-xl bg-primary/20 border border-primary/30">
-                <GraduationCap className="h-7 w-7 text-primary-foreground" />
-              </div>
-            </div>
+            {/* Subtle bottom vignette to ensure seamless transition to the lower section */}
+            <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent pointer-events-none" />
           </div>
         )}
 
